@@ -1,4 +1,4 @@
-import { boolean, float, index, int, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { boolean, float, index, int, longtext, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 import { sql } from "drizzle-orm";
 
 export const users = mysqlTable("users", {
@@ -8,6 +8,8 @@ export const users = mysqlTable("users", {
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  theme: varchar("theme", { length: 16 }).default("system").notNull(),
+  language: varchar("language", { length: 8 }).default("en").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -129,6 +131,107 @@ export const sourceCards = mysqlTable("sourceCards", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => ({ sourceCardIdx: uniqueIndex("source_card_idx").on(table.sourceId, table.cardId) }));
 
+export const courses = mysqlTable("courses", {
+  id: int("id").autoincrement().primaryKey(),
+  workspaceId: int("workspaceId").notNull(),
+  title: varchar("title", { length: 300 }).notNull(),
+  description: text("description"),
+  sourceText: longtext("sourceText"),
+  status: mysqlEnum("status", ["draft", "generating", "generated", "exporting", "exported", "error"]).default("draft").notNull(),
+  astJson: longtext("astJson"),
+  validationErrors: text("validationErrors"),
+  scormPackageKey: text("scormPackageKey"),
+  version: int("version").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => ({ workspaceIdx: index("course_workspace_idx").on(table.workspaceId) }));
+
+export const modules = mysqlTable("modules", {
+  id: int("id").autoincrement().primaryKey(),
+  courseId: int("courseId").notNull(),
+  title: varchar("title", { length: 300 }).notNull(),
+  description: text("description"),
+  orderIndex: int("orderIndex").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => ({ courseIdx: index("module_course_idx").on(table.courseId) }));
+
+export const lessons = mysqlTable("lessons", {
+  id: int("id").autoincrement().primaryKey(),
+  moduleId: int("moduleId").notNull(),
+  title: varchar("title", { length: 300 }).notNull(),
+  description: text("description"),
+  orderIndex: int("orderIndex").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => ({ moduleIdx: index("lesson_module_idx").on(table.moduleId) }));
+
+export const learningObjectives = mysqlTable("learningObjectives", {
+  id: int("id").autoincrement().primaryKey(),
+  lessonId: int("lessonId").notNull(),
+  loId: varchar("loId", { length: 64 }).notNull(),
+  text: text("text").notNull(),
+  bloomVerb: varchar("bloomVerb", { length: 32 }).notNull(),
+  bloomLevel: varchar("bloomLevel", { length: 32 }).notNull(),
+  sourceSpans: text("sourceSpans"),
+  prerequisites: text("prerequisites"),
+  isVerified: boolean("isVerified").default(false).notNull(),
+  orderIndex: int("orderIndex").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => ({ lessonIdx: index("lo_lesson_idx").on(table.lessonId), loIdIdx: uniqueIndex("lo_loid_idx").on(table.loId) }));
+
+export const assessments = mysqlTable("assessments", {
+  id: int("id").autoincrement().primaryKey(),
+  loId: int("loId").notNull(),
+  stem: text("stem").notNull(),
+  optionsJson: text("optionsJson").notNull(),
+  correctIndex: int("correctIndex").notNull(),
+  bloomAlignment: varchar("bloomAlignment", { length: 32 }),
+  status: mysqlEnum("status", ["draft", "reviewed", "approved", "rejected"]).default("draft").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => ({ loIdx: index("assessment_lo_idx").on(table.loId) }));
+
+export const courseVersions = mysqlTable("courseVersions", {
+  id: int("id").autoincrement().primaryKey(),
+  courseId: int("courseId").notNull(),
+  version: int("version").notNull(),
+  astJson: longtext("astJson"),
+  changeLog: text("changeLog"),
+  createdBy: int("createdBy").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => ({ courseVersionIdx: uniqueIndex("course_version_idx").on(table.courseId, table.version) }));
+
+export const studentMastery = mysqlTable("student_mastery", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  courseId: int("courseId").notNull(),
+  lessonId: int("lessonId").notNull(),
+  status: text("status").notNull().default("completed"),
+  score: int("score").notNull().default(100),
+  completedAt: timestamp("completedAt").defaultNow().notNull(),
+}, table => ({ 
+  userCourseIdx: index("mastery_user_course_idx").on(table.userId, table.courseId),
+  lessonIdx: uniqueIndex("mastery_lesson_idx").on(table.userId, table.lessonId) 
+}));
+
+export const userPreferences = mysqlTable("userPreferences", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  fontSize: varchar("fontSize", { length: 16 }).default("Medium").notNull(),
+  editorFont: varchar("editorFont", { length: 16 }).default("Default").notNull(),
+  defaultView: varchar("defaultView", { length: 32 }).default("Dashboard").notNull(),
+  personalizedLearning: boolean("personalizedLearning").default(true).notNull(),
+  aiSuggestions: boolean("aiSuggestions").default(true).notNull(),
+  learningReminders: boolean("learningReminders").default(true).notNull(),
+  weeklyProgress: boolean("weeklyProgress").default(false).notNull(),
+  profileVisibility: boolean("profileVisibility").default(false).notNull(),
+  cloudStorage: boolean("cloudStorage").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => ({ userIdx: uniqueIndex("pref_user_idx").on(table.userId) }));
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Workspace = typeof workspaces.$inferSelect;
@@ -136,3 +239,11 @@ export type Canvas = typeof canvases.$inferSelect;
 export type Card = typeof cards.$inferSelect;
 export type Source = typeof sources.$inferSelect;
 export type SyncRun = typeof syncRuns.$inferSelect;
+export type Course = typeof courses.$inferSelect;
+export type Module = typeof modules.$inferSelect;
+export type Lesson = typeof lessons.$inferSelect;
+export type LearningObjective = typeof learningObjectives.$inferSelect;
+export type Assessment = typeof assessments.$inferSelect;
+export type CourseVersion = typeof courseVersions.$inferSelect;
+export type StudentMastery = typeof studentMastery.$inferSelect;
+export type UserPreferences = typeof userPreferences.$inferSelect;

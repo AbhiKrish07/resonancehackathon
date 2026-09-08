@@ -4,16 +4,63 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import Home from "./pages/Home";
+import DashboardLayout from "./components/DashboardLayout";
+import Dashboard from "./pages/Dashboard";
+import Workspace from './pages/Workspace';
+import { CourseBuilder } from './pages/CourseBuilder';
+import { CourseView } from './pages/CourseView';
+import ArtifactStudio from './pages/ArtifactStudio';
+import PlaceholderPage from './pages/PlaceholderPage';
+import Library from "./pages/Library";
+import Learn from "./pages/Learn";
+import StudyStats from "./pages/StudyStats";
+import Profile from "./pages/Profile";
+import SpaceOverview from "./pages/SpaceOverview";
+import PageEditor from "./pages/PageEditor";
+import { CompanionProvider } from "./contexts/CompanionContext";
+import { FloatingCompanion } from "./components/companion/FloatingCompanion";
+import { DarwinityStoreProvider } from "./contexts/DarwinityStoreContext";
+import { LessonView } from "./pages/LessonView";
+
+import Onboarding from "./pages/Onboarding";
+import { useLocation } from "wouter";
+import { useEffect } from "react";
 
 function Router() {
-  // make sure to consider if you need authentication for certain routes
+  const [location, setLocation] = useLocation();
+
+  useEffect(() => {
+    // Basic onboarding check
+    if (!localStorage.getItem("onboarded") && location !== "/onboarding") {
+      setLocation("/onboarding");
+    }
+  }, [location, setLocation]);
+
   return (
     <Switch>
-      <Route path={"/"} component={Home} />
-      <Route path={"/404"} component={NotFound} />
-      {/* Final fallback route */}
-      <Route component={NotFound} />
+      <Route path="/onboarding" component={Onboarding} />
+      <Route path="/canvas" component={Workspace} />
+      <Route>
+        <DashboardLayout>
+          <Switch>
+            <Route path={"/"} component={Dashboard} />
+            <Route path={"/course-builder/:courseId"} component={CourseBuilder} />
+            <Route path={"/courses/:courseId"} component={CourseView} />
+            <Route path={"/courses/:courseId/learn/:lessonId"} component={LessonView} />
+            <Route path={"/artifacts"} component={ArtifactStudio} />
+            <Route path={"/library"} component={Library} />
+            <Route path={"/learn"} component={Learn} />
+            <Route path={"/stats"} component={StudyStats} />
+            <Route path={"/profile"} component={Profile} />
+            <Route path={"/spaces/:spaceId"} component={SpaceOverview} />
+            <Route path={"/spaces/:spaceId/pages/:pageId"}>
+              {(params) => <PageEditor key={params?.pageId} />}
+            </Route>
+            <Route path={"/404"} component={NotFound} />
+            <Route component={NotFound} />
+          </Switch>
+        </DashboardLayout>
+      </Route>
     </Switch>
   );
 }
@@ -26,14 +73,16 @@ function Router() {
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider
-        defaultTheme="light"
-        // switchable
-      >
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-        </TooltipProvider>
+      <ThemeProvider defaultTheme="light" switchable={true}>
+        <DarwinityStoreProvider>
+          <CompanionProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Router />
+              <FloatingCompanion />
+            </TooltipProvider>
+          </CompanionProvider>
+        </DarwinityStoreProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

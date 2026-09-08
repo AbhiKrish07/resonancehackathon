@@ -184,9 +184,12 @@ export default defineConfig({
       deny: ["**/.*"],
     },
     proxy: {
-      '/api': {
-        target: 'http://localhost:8000',
+      // `/api` is owned by the Express/tRPC app.  Keep the FastAPI service on
+      // a separate prefix so browser requests use one origin in development.
+      '/backend': {
+        target: process.env.CAPTURE_API_URL || 'http://localhost:8080',
         changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/backend/, ''),
       }
     }
   },

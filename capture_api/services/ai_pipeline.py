@@ -398,46 +398,103 @@ extract_entities = extract_entities_from_text
 detect_contradictions = detect_contradictions_llm
 
 async def generate_course_tree(content: str, level: str, time_budget: str) -> Dict[str, Any]:
-    """Generates a structured course from raw text based on level and time budget."""
+    """Generates a structured course from raw text matching the Darwinity Course schema."""
     client = get_groq_client()
     if not client:
-        return {"topics": [{"id": "t1", "title": "Topic 1", "subtopics": [{"id": "s1", "title": "Subtopic 1", "concepts": ["Concept 1"]}]}]}
+        return {
+            "title": "Fallback Course",
+            "description": "Generated fallback",
+            "learningGoal": "Learn something",
+            "estimatedMinutes": 30,
+            "modules": [],
+            "lessons": []
+        }
         
-    prompt = f"""You are an expert curriculum designer. Turn the following text into a structured course.
+    prompt = f"""You are an expert curriculum designer. Turn the following text into a structured course matching the requested JSON format.
 Target audience level: {level}
 Expected time budget: {time_budget}
 
 Text:
-\"\"\"{content[:4000]}\"\"\"
+\"\"\"{content[:6000]}\"\"\"
 
-Output JSON matching this exact structure:
+Output ONLY valid JSON matching this exact structure:
 {{
-  "topics": [
+  "title": "Course Title",
+  "description": "Short description of the course",
+  "learningGoal": "Primary learning goal",
+  "estimatedMinutes": 60,
+  "modules": [
     {{
-      "id": "t1",
-      "title": "Topic Name",
-      "summary": "Brief summary",
-      "subtopics": [
+      "id": "m1",
+      "title": "Module 1 Name",
+      "description": "What this module covers",
+      "lessonIds": ["l1", "l2"]
+    }}
+  ],
+  "lessons": [
+    {{
+      "id": "l1",
+      "title": "Lesson 1 Name",
+      "objective": "Lesson objective",
+      "estimatedMinutes": 10,
+      "difficulty": "{level}",
+      "status": "draft",
+      "hasAssessment": true,
+      "blocks": [
         {{
-          "id": "s1",
-          "title": "Subtopic Name",
-          "concepts": ["Concept 1", "Concept 2"]
+          "id": "b1",
+          "type": "explanation",
+          "content": "Detailed explanation of a concept from the text."
+        }},
+        {{
+          "id": "b2",
+          "type": "example",
+          "content": "An example illustrating the concept."
+        }},
+        {{
+          "id": "b3",
+          "type": "multiple-choice",
+          "content": "A question testing the concept?",
+          "metadata": {{
+            "options": ["Option A", "Option B", "Option C", "Option D"],
+            "correctIndex": 0
+          }}
         }}
       ]
+    }},
+    {{
+      "id": "l2",
+      "title": "Lesson 2 Name",
+      "objective": "Lesson objective",
+      "estimatedMinutes": 10,
+      "difficulty": "{level}",
+      "status": "draft",
+      "hasAssessment": false,
+      "blocks": []
     }}
   ]
-}}"""
+}}
+IMPORTANT: Ensure lessonIds in modules exactly match the ids of the lessons array. Generate at least 1 module and 2 lessons with detailed blocks. Do not use markdown backticks in output, just pure JSON."""
     try:
         response = await _call_groq_with_fallback(
             client=client,
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
-            temperature=0.2
+            temperature=0.3,
+            max_tokens=4000
         )
-        return json.loads(response.choices[0].message.content)
+        result_text = response.choices[0].message.content
+        return json.loads(result_text)
     except Exception as e:
-        print(f"Course generation error: {e}")
-        return {"topics": []}
+        print(f"Course generation failed: {e}")
+        return {
+            "title": "Failed to Generate",
+            "description": str(e),
+            "learningGoal": "N/A",
+            "estimatedMinutes": 0,
+            "modules": [],
+            "lessons": []
+        }
 
 async def generate_canvas_graph(course_tree: Dict[str, Any]) -> Dict[str, Any]:
     """Generates nodes and edges for the spatial canvas from a course tree."""

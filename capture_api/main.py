@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from routers import (
-    captures, spaces, retrieval, metrics, course, srs, audio
+    captures, spaces, retrieval, metrics, course, srs, audio, scorm, assessment, curriculum, artifacts, study, profile
 )
 from services.db import get_db
 
@@ -40,6 +40,12 @@ app.include_router(metrics.router)
 app.include_router(course.router)
 app.include_router(srs.router)
 app.include_router(audio.router)
+app.include_router(scorm.router)
+app.include_router(assessment.router)
+app.include_router(curriculum.router)
+app.include_router(artifacts.router)
+app.include_router(study.router)
+app.include_router(profile.router)
 
 
 
@@ -47,8 +53,8 @@ app.include_router(audio.router)
 async def api_info():
     db = get_db()
     return {
-        "name": "CAPTURE — Context Intelligence Platform",
-        "tagline": "Your scattered information, finally connected.",
+        "name": "Darwinity — AI-Powered Study Hub",
+        "tagline": "Your learning companion that turns chaos into courses.",
         "version": "2.0.0",
         "status": "online",
         "stats": {
@@ -62,14 +68,18 @@ async def api_info():
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "service": "capture-context-engine"}
+    return {"status": "ok", "service": "darwinity-study-hub"}
 
 
 # Mount frontend vanilla UI at root so everything runs seamlessly on port 8080
 vanilla_static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "capture_vanilla")
 if os.path.exists(vanilla_static_dir):
-    app.mount("/", StaticFiles(directory=vanilla_static_dir, html=True), name="static_vanilla")
+    app.mount("/vanilla", StaticFiles(directory=vanilla_static_dir, html=True), name="static_vanilla")
 
+uploads_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "uploads")
+if not os.path.exists(uploads_dir):
+    os.makedirs(uploads_dir)
+app.mount("/files", StaticFiles(directory=uploads_dir), name="files")
 
 if __name__ == "__main__":
     import uvicorn

@@ -22,30 +22,34 @@ async def generate_course(req: CourseGenerationRequest):
     db = get_db()
     
     # 1. Chunk and embed the content
-    # For a real implementation, we would extract text from PDF, chunk it, and embed it.
     chunks = chunk_and_embed_text(req.content)
     
     course_id = str(uuid.uuid4())
     
     # 2. Call AI pipeline to generate the course tree based on personalization
-    course_tree = await generate_course_tree(req.content, req.level, req.time_budget)
+    course_data = await generate_course_tree(req.content, req.level, req.time_budget)
     
-    # 3. Generate the spatial canvas graph (nodes and edges)
-    # This now utilizes open_notebook's LangGraph advanced workflows internally.
-    canvas_graph = await generate_canvas_graph(course_tree)
+    # 3. Inject ID and set defaults
+    course_data["id"] = course_id
+    course_data["progress"] = 0
+    course_data["status"] = "active"
+    if "lessons" in course_data and len(course_data["lessons"]) > 0:
+        course_data["currentLessonId"] = course_data["lessons"][0].get("id", "l1")
+        course_data["totalLessons"] = len(course_data["lessons"])
+    else:
+        course_data["currentLessonId"] = "l1"
+        course_data["totalLessons"] = 0
+    course_data["completedLessons"] = 0
+    course_data["nextAction"] = "Start"
     
-    # Mock storing it in DB (for MVP, we might just return it to the client for local caching)
+    # Mock storing it in DB
     db.spaces[course_id] = {
         "id": course_id,
-        "tree": course_tree,
-        "graph": canvas_graph,
+        "tree": course_data,
         "chunks": chunks
     }
     
     return {
         "status": "success",
-        "course_id": course_id,
-        "course_tree": course_tree,
-        "canvas_graph": canvas_graph,
-        "chunks_count": len(chunks)
+        "course": course_data
     }

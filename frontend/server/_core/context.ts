@@ -1,6 +1,7 @@
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import type { User } from "../../drizzle/schema";
 import { sdk } from "./sdk";
+import { getDb } from "../db";
 
 export type TrpcContext = {
   req: CreateExpressContextOptions["req"];
@@ -8,11 +9,35 @@ export type TrpcContext = {
   user: User | null;
 };
 
+// Demo user injected in dev mode when no real DB/OAuth is available
+const DEV_DEMO_USER: User = {
+  id: 1,
+  openId: "dev_demo_user",
+  name: "Demo User",
+  email: "demo@darwinity.ai",
+  loginMethod: "dev",
+  role: "admin",
+  theme: "system",
+  language: "en",
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  lastSignedIn: new Date(),
+};
+
 export async function createContext(
   opts: CreateExpressContextOptions
 ): Promise<TrpcContext> {
-  let user: User | null = null;
+  // DEV MODE: If no DATABASE_URL is configured, auto-inject a demo user so
+  // all features work locally without OAuth or MySQL.
+  if (!process.env.DATABASE_URL) {
+    return {
+      req: opts.req,
+      res: opts.res,
+      user: DEV_DEMO_USER,
+    };
+  }
 
+  let user: User | null = null;
   try {
     user = await sdk.authenticateRequest(opts.req);
   } catch (error) {

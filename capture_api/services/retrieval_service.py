@@ -111,13 +111,13 @@ class RetrievalService:
                 relevant_contras.append(pc)
 
         # 5. Synthesize answer with Groq LLM
-        if is_greeting:
-            synth_result = {
-                "answer": "Hello! I am CAPTURE, your context intelligence memory assistant. Ask me anything about your spaces, projects, or saved context.",
-                "why_sources": "No specific context needed for conversational greeting."
-            }
-            sources = []
-            relevant_contras = []
+        if not query or query.lower() in ['hi', 'hello']:
+            return AskResponse(
+                answer="Hello! I am Darwinity, your AI learning companion. Ask me anything about your courses, sources, or study materials, and I'll help you master them.",
+                sources=[],
+                processing_time_ms=0,
+                metrics=ContextReductionMetrics(naive_context_tokens=0, actual_context_tokens=0, context_reduction_percentage=0, total_space_captures=0, retrieved_captures_count=0)
+            )
         else:
             synth_result = await synthesize_answer(
                 query=query,

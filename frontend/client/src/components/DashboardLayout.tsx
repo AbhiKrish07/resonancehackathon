@@ -17,19 +17,61 @@ import {
   SidebarMenuItem,
   SidebarProvider,
   SidebarTrigger,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarGroupContent,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { startLogin } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users } from "lucide-react";
+import { 
+  Home, 
+  Library, 
+  Settings, 
+  LogOut, 
+  BookOpen, 
+  BrainCircuit, 
+  TrendingUp, 
+  UserCircle,
+  Menu,
+  SquareStack,
+  Bot,
+  PanelLeft,
+  Sparkles,
+  Layers
+} from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
+import { useTheme } from "../contexts/ThemeContext";
 
-const menuItems = [
-  { icon: LayoutDashboard, label: "Page 1", path: "/" },
-  { icon: Users, label: "Page 2", path: "/some-path" },
+import { SpacesNavSection } from "./spaces/SpacesNavSection";
+import { ActiveCoursesNav } from "./courses/ActiveCoursesNav";
+
+const menuGroups = [
+  {
+    label: "STUDY STUDIO",
+    items: [
+      { icon: Home, label: "Home", path: "/" },
+      { icon: Layers, label: "Artifact Studio", path: "/artifacts" },
+      { icon: SquareStack, label: "Canvas Workspace", path: "/canvas" },
+      { icon: BookOpen, label: "Library", path: "/library" },
+    ]
+  },
+  {
+    label: "LEARNING",
+    items: [
+      { icon: Bot, label: "Active Courses", path: "/learn" },
+      { icon: TrendingUp, label: "Study Stats", path: "/stats" },
+    ]
+  },
+  {
+    label: "ACCOUNT",
+    items: [
+      { icon: UserCircle, label: "Profile", path: "/profile" },
+    ]
+  }
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -105,12 +147,13 @@ function DashboardLayoutContent({
   setSidebarWidth,
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const activeMenuItem = menuItems.find(item => item.path === location);
+  const activeMenuItem = menuGroups.flatMap(g => g.items).find(item => item.path === location);
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -176,27 +219,61 @@ function DashboardLayoutContent({
             </div>
           </SidebarHeader>
 
-          <SidebarContent className="gap-0">
-            <SidebarMenu className="px-2 py-1">
-              {menuItems.map(item => {
-                const isActive = location === item.path;
-                return (
-                  <SidebarMenuItem key={item.path}>
+          <SidebarContent className="gap-0 py-2">
+            {!isCollapsed ? (
+              <div className="px-2">
+                <div className="mb-4">
+                  <div className="px-3 mb-1">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">STUDY STUDIO</span>
+                  </div>
+                  <SidebarMenu className="px-0">
+                    <SidebarMenuItem>
+                      <SidebarMenuButton isActive={location === "/"} onClick={() => setLocation("/")} className="h-9">
+                        <Home className={`h-4 w-4 ${location === "/" ? "text-primary" : ""}`} />
+                        <span>Home</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton isActive={location === "/library"} onClick={() => setLocation("/library")} className="h-9">
+                        <BookOpen className={`h-4 w-4 ${location === "/library" ? "text-primary" : ""}`} />
+                        <span>Library</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  </SidebarMenu>
+                </div>
+                
+                <SpacesNavSection />
+                <ActiveCoursesNav />
+              </div>
+            ) : (
+              <div className="px-2 text-center text-xs text-muted-foreground pt-4">
+                <SquareStack className="h-5 w-5 mx-auto mb-4" />
+                <Bot className="h-5 w-5 mx-auto" />
+              </div>
+            )}
+            
+            <SidebarGroup>
+              {!isCollapsed && (
+                <SidebarGroupLabel className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 mt-4">
+                  ACCOUNT
+                </SidebarGroupLabel>
+              )}
+              <SidebarGroupContent>
+                <SidebarMenu className="px-2 py-1">
+                  <SidebarMenuItem>
                     <SidebarMenuButton
-                      isActive={isActive}
-                      onClick={() => setLocation(item.path)}
-                      tooltip={item.label}
+                      isActive={location === "/profile"}
+                      onClick={() => setLocation("/profile")}
+                      tooltip="Profile"
                       className={`h-10 transition-all font-normal`}
                     >
-                      <item.icon
-                        className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
-                      />
-                      <span>{item.label}</span>
+                      <UserCircle className={`h-4 w-4 ${location === "/profile" ? "text-primary" : ""}`} />
+                      <span>Profile</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
           </SidebarContent>
 
           <SidebarFooter className="p-3">
@@ -219,6 +296,18 @@ function DashboardLayoutContent({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
+                {toggleTheme && (
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.preventDefault();
+                      toggleTheme();
+                    }}
+                    className="cursor-pointer"
+                  >
+                    <Settings className="mr-2 h-4 w-4" />
+                    <span>Toggle Theme ({theme})</span>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   onClick={logout}
                   className="cursor-pointer text-destructive focus:text-destructive"

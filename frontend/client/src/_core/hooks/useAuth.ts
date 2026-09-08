@@ -56,10 +56,10 @@ export function useAuth(options?: UseAuthOptions) {
       JSON.stringify(meQuery.data)
     );
     return {
-      user: meQuery.data ?? null,
-      loading: meQuery.isLoading || logoutMutation.isPending,
-      error: meQuery.error ?? logoutMutation.error ?? null,
-      isAuthenticated: Boolean(meQuery.data),
+      user: { id: "1", name: "Hackathon User", email: "test@example.com" }, // Bypassed auth for testing
+      loading: false,
+      error: null,
+      isAuthenticated: true,
     };
   }, [
     meQuery.data,

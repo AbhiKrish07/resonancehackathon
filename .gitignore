@@ -53,3 +53,11 @@ notebookllama-main/
 datasets/
 db_kaggle_sematicsearch/
 memory-main/
+
+# Build artifacts & runtime files
+capture_data.db-shm
+capture_data.db-wal
+capture_api/course_export.zip
+uploads/
+frontend/.dev-store.json
+dist/

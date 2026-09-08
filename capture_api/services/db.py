@@ -41,6 +41,7 @@ class LocalContextDB:
         self.entity_members: List[Dict[str, Any]] = [] # {resolved_entity_id, capture_entity_id, similarity_score}
         self.contradictions: Dict[str, Dict[str, Any]] = {} # id -> data
         self.metrics_log: List[Dict[str, Any]] = []
+        self.profiles: Dict[str, Dict[str, Any]] = {}
 
         # Initialize default demo user
         demo_user_id = "00000000-0000-0000-0000-000000000000"
@@ -64,6 +65,7 @@ class LocalContextDB:
             c.execute('''CREATE TABLE IF NOT EXISTS capture_entities (id TEXT PRIMARY KEY, data TEXT)''')
             c.execute('''CREATE TABLE IF NOT EXISTS resolved_entities (id TEXT PRIMARY KEY, data TEXT)''')
             c.execute('''CREATE TABLE IF NOT EXISTS contradictions (id TEXT PRIMARY KEY, data TEXT)''')
+            c.execute('''CREATE TABLE IF NOT EXISTS profiles (user_id TEXT PRIMARY KEY, data TEXT)''')
             conn.commit()
             conn.close()
         except Exception as e:
@@ -102,6 +104,12 @@ class LocalContextDB:
                 try:
                     self.contradictions[row[0]] = json.loads(row[1])
                 except:
+                    pass
+            c.execute("SELECT user_id, data FROM profiles")
+            for row in c.fetchall():
+                try:
+                    self.profiles[row[0]] = json.loads(row[1])
+                except Exception:
                     pass
             conn.close()
             print(f"Successfully loaded DB state from SQLite persistence.")
@@ -157,6 +165,28 @@ class LocalContextDB:
             conn.close()
         except:
             pass
+
+    # ---------------- Profiles ----------------
+    def get_profile(self, user_id: str, default: Dict[str, Any]) -> Dict[str, Any]:
+        profile = self.profiles.get(str(user_id))
+        if profile:
+            # Newly introduced profile preferences must be visible for profiles
+            # persisted before the field existed (for example LearnLoop's
+            # onboarding payload), without requiring a migration or reset.
+            return {"user_id": str(user_id), **default, **profile}
+        return {"user_id": str(user_id), **default}
+
+    def save_profile(self, user_id: str, profile: Dict[str, Any]) -> Dict[str, Any]:
+        record = {"user_id": str(user_id), **profile, "updated_at": datetime.utcnow().isoformat()}
+        self.profiles[str(user_id)] = record
+        try:
+            conn = sqlite3.connect(self.db_path)
+            conn.execute("INSERT OR REPLACE INTO profiles (user_id, data) VALUES (?, ?)", (str(user_id), json.dumps(record)))
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass
+        return record
 
     @classmethod
     def get_instance(cls):

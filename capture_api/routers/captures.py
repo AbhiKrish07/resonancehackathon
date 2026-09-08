@@ -1,5 +1,6 @@
 from typing import List, Optional
 from uuid import UUID
+import os
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Body
 from models.schemas import Capture, CaptureCreate, ProcessingStatus
 from services.db import get_db
@@ -41,6 +42,24 @@ async def create_capture(
 
     return db.get_capture(cap["id"])
 
+@router.get("/{capture_id}", response_model=Capture)
+async def get_capture_by_id(
+    capture_id: str,
+    current_user = Depends(get_current_user)
+):
+    """
+    Retrieve a capture and its associated entities.
+    """
+    db = get_db()
+    cap = db.get_capture(capture_id)
+    if not cap:
+        raise HTTPException(status_code=404, detail="Capture not found")
+        
+    # Optional authorization check
+    if cap.get("user_id") != str(current_user.id):
+        raise HTTPException(status_code=403, detail="Not authorized to view this capture")
+        
+    return cap
 
 @router.post("/upload", response_model=Capture)
 async def upload_file_capture(
@@ -62,16 +81,33 @@ async def upload_file_capture(
     c_type = "document"
     extracted_text = ""
 
+    # Save file locally for Docling processing
+    upload_dir = os.path.join(os.path.dirname(__file__), "..", "..", "uploads")
+    os.makedirs(upload_dir, exist_ok=True)
+    file_path = os.path.join(upload_dir, f"{filename}")
+    with open(file_path, "wb") as f:
+        f.write(content_bytes)
+
     if ext in ["pdf"]:
         c_type = "pdf"
         try:
-            from io import BytesIO
-            from pypdf import PdfReader
-            reader = PdfReader(BytesIO(content_bytes))
-            for page in reader.pages[:10]:
-                extracted_text += page.extract_text() or ""
+            from services.docling_service import DoclingService
+            docling_result = DoclingService.extract_markdown(file_path)
+            if docling_result.get("markdown"):
+                extracted_text = docling_result["markdown"]
+            else:
+                extracted_text = f"PDF Document: {filename}"
+        except ImportError:
+            try:
+                from io import BytesIO
+                from pypdf import PdfReader
+                reader = PdfReader(BytesIO(content_bytes))
+                for page in reader.pages[:10]:
+                    extracted_text += page.extract_text() or ""
+            except Exception:
+                extracted_text = f"PDF Document: {filename}"
         except Exception as e:
-            extracted_text = f"PDF Document: {filename}"
+            extracted_text = f"PDF Document (Error parsing): {filename}"
 
     elif ext in ["png", "jpg", "jpeg", "webp"]:
         c_type = "screenshot" if "screen" in filename.lower() or "shot" in filename.lower() else "image"
@@ -154,7 +190,7 @@ async def upload_file_capture(
         source_type="file_upload",
         file_url=f"/files/{filename}",
         space_ids=valid_space_ids,
-        metadata={"filename": filename, "size": len(content_bytes), "extension": ext}
+        metadata={"filename": filename, "size": len(content_bytes), "extension": ext, "file_path": file_path}
     )
 
     IngestionService.enqueue_processing(cap["id"])
@@ -182,7 +218,7 @@ async def get_capture_detail(
 ):
     db = get_db()
     cap = db.get_capture(str(id))
-    if not cap:
+    if not cap or cap.get("user_id") != str(current_user.id):
         raise HTTPException(status_code=404, detail="Capture not found")
     return cap
 
@@ -221,3 +257,22 @@ async def delete_capture(
     if not deleted:
         raise HTTPException(status_code=404, detail="Capture not found")
     return {"status": "deleted", "id": str(id)}
+
+
+@router.post("/docling/extract")
+async def extract_with_docling(
+    file: UploadFile = File(...),
+    current_user = Depends(get_current_user)
+):
+    """Extract structured markdown from document using Docling."""
+    content_bytes = await file.read()
+    filename = file.filename or "uploaded_file"
+    
+    try:
+        from services.docling_service import DoclingService
+        result = DoclingService.extract_from_bytes(content_bytes, filename)
+        return result
+    except ImportError:
+        raise HTTPException(status_code=501, detail="Docling not installed")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

@@ -8,6 +8,7 @@ from services.ai_pipeline import cleanse_and_normalize_text, extract_entities_fr
 from services.entity_resolution_service import resolve_space_entities
 from services.contradiction_service import run_contradiction_check
 from services.summary_service import update_space_summary_if_needed
+from services.docling_service import DoclingService
 
 class IngestionService:
     @staticmethod
@@ -32,6 +33,30 @@ class IngestionService:
         try:
             raw_content = capture.get("original_content", "")
             capture_type = capture.get("capture_type", "text")
+            file_url = capture.get("file_url", "")
+            metadata = capture.get("metadata", {})
+
+            # Enhanced extraction for PDFs using Docling
+            if capture_type in ["pdf", "document"] and file_url:
+                # Try to extract from file if we have the original bytes
+                file_path = metadata.get("file_path")
+                if file_path and os.path.exists(file_path):
+                    with open(file_path, "rb") as f:
+                        file_bytes = f.read()
+                    docling_result = DoclingService.extract_from_bytes(file_bytes, metadata.get("filename", "document.pdf"))
+                    if docling_result.get("markdown"):
+                        raw_content = docling_result["markdown"]
+                        # Store structured extraction in metadata
+                        capture["metadata"] = {
+                            **metadata,
+                            "docling_extraction": {
+                                "headings": docling_result.get("headings", []),
+                                "tables": docling_result.get("tables", []),
+                                "figures": docling_result.get("figures", []),
+                                "page_count": docling_result.get("metadata", {}).get("page_count", 1)
+                            }
+                        }
+                        db.update_capture(capture_id, {"metadata": capture["metadata"]})
 
             # 1. Normalization
             normalized_content = await cleanse_and_normalize_text(raw_content)
