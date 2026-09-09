@@ -1,4 +1,4 @@
-# 🎓 LearnLoop — AI-Powered Learning Management System & Course Builder
+# LearnLoop — AI-Powered Learning Management System & Course Builder
 
 > **"LearnLoop transforms fragmented materials like PDFs, textbooks, and notes into structured courses, interactive assessments, and personalized learning experiences."**
 
@@ -10,7 +10,7 @@
 
 ---
 
-## 📌 Problem Statement
+## Problem Statement
 
 In today's fast-paced world, learners and educators are overwhelmed with unstructured information—raw PDFs, scattered notes, voice memos, and lengthy textbooks. Traditional Learning Management Systems (LMS) force users to manually build curricula, design quizzes, and track progress, which is incredibly time-consuming.
 
@@ -18,7 +18,7 @@ In today's fast-paced world, learners and educators are overwhelmed with unstruc
 
 ---
 
-## ⚡ Key Capabilities & Architecture
+## Key Capabilities & Architecture
 
 ```
    RAW UNSTRUCTURED INPUTS
@@ -46,32 +46,32 @@ In today's fast-paced world, learners and educators are overwhelmed with unstruc
 └───────────────────────────────┘
 ```
 
-### 1. 🎯 AI-Powered Course Generation
+### 1. AI-Powered Course Generation
 - Transforms any topic or uploaded document into a beautifully structured **10-level course**.
 - Seamlessly blends LLM-generated dynamic content with robust local templates for flawless generation.
 - Automatically generates modules, lessons, and interactive blocks.
 
-### 2. 🧠 Interactive Assessments (MCQs & Flashcards)
+### 2. Interactive Assessments (MCQs & Flashcards)
 - Automatically extracts key concepts from textbooks and generates **Multiple Choice Questions (MCQs)** and **Flashcards**.
 - Provides rich explanations for wrong answers to reinforce learning.
 
-### 3. 🎙️ Multimodal Capture Ingestion
+### 3. Multimodal Capture Ingestion
 - **Vision OCR:** Powered by Groq Vision for scanning receipts, textbook pages, and diagrams.
 - **Audio Transcription:** Powered by Groq Whisper for voice memos and lectures.
 - **Document Extractors:** Multi-format streaming extractors for `.pdf`, `.docx`, `.md`, and more.
 
-### 4. 🎮 Gamified Learning & XP System
+### 4. Gamified Learning & XP System
 - Keeps learners engaged with a dynamic progression system.
 - Earn **+15 XP** for correct MCQ answers and **+10 Score** for completing levels.
 - Track daily streaks and learning milestones directly on the dashboard.
 
-### 5. 🗺️ Spatial Canvas & Study Workspace
+### 5. Spatial Canvas & Study Workspace
 - An interactive spatial whiteboard canvas embedded directly in the frontend for visual entity exploration and card grouping.
 - Smooth, frictionless rich-text editor for taking notes side-by-side with course materials.
 
 ---
 
-## 📁 Repository Structure
+## Repository Structure
 
 ```
 learnloop/
@@ -93,7 +93,7 @@ learnloop/
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Backend Setup (FastAPI + Python)
 1. Navigate to the `capture_api` directory: `cd capture_api`
