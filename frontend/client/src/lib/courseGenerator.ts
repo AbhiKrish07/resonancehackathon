@@ -1,6 +1,8 @@
 import { Course, CourseModule, CourseLesson } from "@/types/darwinity";
 
-function getTopicSpecificLevels(topic: string): { title: string; pdfText: string; flashcardFront: string; flashcardBack: string; q1: string; o1: string[]; exp1: string; q2: string; o2: string[]; exp2: string }[] {
+type LevelData = { title: string; pdfText: string; flashcardFront: string; flashcardBack: string; q1: string; o1: string[]; exp1: string; q2: string; o2: string[]; exp2: string };
+
+function getTopicSpecificLevels(topic: string): LevelData[] {
   const t = topic.trim();
   const lower = t.toLowerCase();
 
@@ -256,15 +258,48 @@ function getTopicSpecificLevels(topic: string): { title: string; pdfText: string
   ];
 }
 
+const STOP_WORDS = new Set(['about', 'after', 'again', 'also', 'and', 'are', 'been', 'being', 'build', 'course', 'from', 'have', 'into', 'more', 'most', 'only', 'source', 'that', 'the', 'their', 'there', 'these', 'this', 'with', 'your']);
+
+function sourceDrivenLevels(source: string, title: string): LevelData[] {
+  const sentences = source.replace(/\s+/g, ' ').match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map(value => value.trim()).filter(value => value.length > 24) || [];
+  const terms = source.toLowerCase().match(/[a-z][a-z-]{3,}/g) || [];
+  const keywords = Array.from(new Set(terms.filter(term => !STOP_WORDS.has(term)))).slice(0, 18);
+  const stages = ['Orientation', 'Core idea', 'Key vocabulary', 'How it works', 'Evidence', 'Practice', 'Connections', 'Common pitfalls', 'Application', 'Mastery synthesis'];
+  const fallback = `This lesson builds a practical understanding of ${title} through focused study and active recall.`;
+  const pick = <T,>(items: T[], index: number, fallbackValue: T) => items.length ? items[index % items.length] : fallbackValue;
+
+  return stages.map((stage, index) => {
+    const focus = pick(keywords, index * 2, title.toLowerCase());
+    const supporting = pick(sentences, index, fallback);
+    const related = pick(keywords, index * 2 + 1, 'the source material');
+    const distractors = [...keywords.filter(term => term !== focus && term !== related).slice(index % 4, (index % 4) + 2), 'an unrelated detail', 'a conclusion not supported by the source'];
+    const titleCase = focus.replace(/\b\w/g, (char: string) => char.toUpperCase());
+    return {
+      title: `${stage}: ${titleCase}`,
+      pdfText: `### ${stage}: ${titleCase}\n\n${supporting}\n\n#### Focus for this level\n- Explain **${focus}** in your own words.\n- Connect it to **${related}**.\n- Identify the evidence or example the source uses.`,
+      flashcardFront: `What does the source say about ${focus}?`,
+      flashcardBack: supporting,
+      q1: `Which statement best reflects the source's treatment of ${focus}?`,
+      o1: [supporting, ...distractors.map(item => `It treats ${item} as the main explanation for ${focus}.`)],
+      exp1: `The source specifically states: ${supporting}`,
+      q2: `In this lesson, ${focus} is most closely connected to which idea?`,
+      o2: [related, ...distractors],
+      exp2: `The lesson pairs ${focus} with ${related} based on the supplied material.`
+    };
+  });
+}
+
 export function generate10LevelCourse(
   titlePrompt: string,
   difficulty: "beginner" | "intermediate" | "advanced" = "intermediate",
   goalPrompt?: string,
   selectedSourceIds: string[] = []
 ): Course {
-  const cleanTitle = titlePrompt.trim() || "Generated Study Course";
+  const sourceMatch = titlePrompt.match(/^Build a course from this source:\s*([^\n]+)\n*([\s\S]*)$/i);
+  const cleanTitle = (sourceMatch?.[1] || titlePrompt.trim() || "Generated Study Course").slice(0, 120);
+  const sourceMaterial = sourceMatch?.[2]?.trim() || titlePrompt;
   const courseId = `course-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-  const levelData = getTopicSpecificLevels(cleanTitle);
+  const levelData = sourceDrivenLevels(sourceMaterial, cleanTitle);
 
   const modules: CourseModule[] = [];
   const lessons: CourseLesson[] = [];

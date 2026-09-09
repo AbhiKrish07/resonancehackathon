@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, FileText, Brain, BookOpen, Layers, Clock, GraduationCap, Loader2, ChevronRight, RotateCcw } from 'lucide-react';
+import { Sparkles, FileText, Brain, BookOpen, Layers, Clock, GraduationCap, Loader2, ChevronRight, RotateCcw, Bookmark, Trash2 } from 'lucide-react';
 import { useSearch } from 'wouter';
 import { Button } from '../components/ui/button';
 
@@ -42,6 +42,12 @@ interface StudyArtifact {
   key_concepts?: KeyConcept[];
   timeline?: TimelineEvent[];
 }
+
+interface SavedArtifact extends StudyArtifact {
+  savedAt: string;
+}
+
+const SAVED_ARTIFACTS_KEY = 'learnloop-saved-artifacts';
 
 const ARTIFACT_OPTIONS: { type: ArtifactType; label: string; icon: React.ReactNode; desc: string; color: string }[] = [
   { type: 'mindmap', label: 'Mind Map', icon: <Brain size={22} />, desc: 'Visual concept hierarchy', color: '#7c3aed' },
@@ -165,6 +171,7 @@ export default function ArtifactStudio() {
   const [selectedType, setSelectedType] = useState<ArtifactType | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [artifact, setArtifact] = useState<StudyArtifact | null>(null);
+  const [savedArtifacts, setSavedArtifacts] = useState<SavedArtifact[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const searchString = useSearch();
@@ -191,6 +198,37 @@ export default function ArtifactStudio() {
       .catch(err => console.error("Failed to load capture for artifact", err));
     }
   }, [captureId]);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SAVED_ARTIFACTS_KEY) || '[]');
+      if (Array.isArray(saved)) setSavedArtifacts(saved);
+    } catch {
+      // A malformed older value should not stop Artifact Studio from loading.
+      setSavedArtifacts([]);
+    }
+  }, []);
+
+  const saveArtifacts = (next: SavedArtifact[]) => {
+    setSavedArtifacts(next);
+    localStorage.setItem(SAVED_ARTIFACTS_KEY, JSON.stringify(next));
+  };
+
+  const handleSaveArtifact = () => {
+    if (!artifact) return;
+    const alreadySaved = savedArtifacts.some(item => item.id === artifact.id);
+    if (alreadySaved) return;
+    saveArtifacts([{ ...artifact, savedAt: new Date().toISOString() }, ...savedArtifacts]);
+  };
+
+  const handleOpenSavedArtifact = (saved: SavedArtifact) => {
+    setArtifact(saved);
+    setSourceTitle(saved.source_title || 'Saved source');
+  };
+
+  const handleDeleteSavedArtifact = (id: string) => {
+    saveArtifacts(savedArtifacts.filter(item => item.id !== id));
+  };
 
   const handleGenerate = async () => {
     if (!sourceText.trim() || !sourceTitle.trim() || !selectedType) return;
@@ -315,9 +353,19 @@ export default function ArtifactStudio() {
                   <h2 className="font-extrabold text-gray-900 text-lg">{artifact.title}</h2>
                   <p className="text-xs text-gray-500 mt-0.5">Generated from: {artifact.source_title}</p>
                 </div>
-                <button onClick={() => setArtifact(null)} className="text-gray-400 hover:text-gray-600 flex items-center gap-1 text-sm font-bold">
-                  <RotateCcw size={14} /> New
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleSaveArtifact}
+                    disabled={savedArtifacts.some(item => item.id === artifact.id)}
+                    className="text-purple-600 hover:text-purple-800 disabled:text-gray-400 flex items-center gap-1 text-sm font-bold"
+                  >
+                    <Bookmark size={14} fill={savedArtifacts.some(item => item.id === artifact.id) ? 'currentColor' : 'none'} />
+                    {savedArtifacts.some(item => item.id === artifact.id) ? 'Saved' : 'Save artifact'}
+                  </button>
+                  <button onClick={() => setArtifact(null)} className="text-gray-400 hover:text-gray-600 flex items-center gap-1 text-sm font-bold">
+                    <RotateCcw size={14} /> New
+                  </button>
+                </div>
               </div>
               <div className="p-6 max-h-[70vh] overflow-y-auto">
                 {renderArtifact()}
@@ -333,6 +381,28 @@ export default function ArtifactStudio() {
                 Paste your source material, pick an artifact type, and click Generate. The AI will create interactive study material for you.
               </p>
             </div>
+          )}
+
+          {savedArtifacts.length > 0 && (
+            <section className="mt-6 bg-white rounded-2xl border border-gray-200 p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <Bookmark size={16} className="text-purple-600" />
+                <h2 className="font-extrabold text-gray-900">Saved artifacts</h2>
+              </div>
+              <div className="space-y-2">
+                {savedArtifacts.map(saved => (
+                  <div key={`${saved.id}-${saved.savedAt}`} className="flex items-center justify-between gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
+                    <button onClick={() => handleOpenSavedArtifact(saved)} className="min-w-0 text-left hover:text-purple-700">
+                      <p className="font-bold text-sm truncate">{saved.title}</p>
+                      <p className="text-xs text-gray-500 capitalize">{saved.artifact_type.replace('_', ' ')} · {new Date(saved.savedAt).toLocaleDateString()}</p>
+                    </button>
+                    <button onClick={() => handleDeleteSavedArtifact(saved.id)} className="p-1.5 text-gray-400 hover:text-red-600" aria-label={`Delete ${saved.title}`}>
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
           )}
         </div>
       </div>

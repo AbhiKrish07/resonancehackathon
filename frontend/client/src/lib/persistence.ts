@@ -1,6 +1,10 @@
 import { DarwinityState, Space, Page, Course, BlockNode } from "@/types/darwinity";
 
 const STORAGE_KEY = "darwinity-prototype-state";
+// Bump this when a migration is needed.  The previous migration only ran for
+// states with 5+ courses, which left repeated, interrupted generated courses
+// in smaller libraries (the "Resume / 0%" rows users were seeing).
+const TEST_COURSE_CLEANUP_KEY = "darwinity-generated-courses-cleaned-v2";
 
 export const initialSpaces: Space[] = [
   {
@@ -6699,7 +6703,17 @@ export function loadPersistedState(): DarwinityState {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && Array.isArray(parsed.courses) && parsed.courses.length >= 5) {
+      if (parsed && Array.isArray(parsed.courses)) {
+        // One-time cleanup requested for generated test courses. Starter courses have
+        // stable IDs from the bundled dataset; newly created courses do not. Run this
+        // regardless of course count so a single failed generation cannot survive.
+        if (!localStorage.getItem(TEST_COURSE_CLEANUP_KEY)) {
+          const starterCourseIds = new Set(initialCourses.map(course => course.id));
+          parsed.courses = parsed.courses.filter((course: Course) => starterCourseIds.has(course.id));
+          parsed.activeCourseId = starterCourseIds.has(parsed.activeCourseId) ? parsed.activeCourseId : (initialCourses[0]?.id || null);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+          localStorage.setItem(TEST_COURSE_CLEANUP_KEY, "true");
+        }
         return parsed;
       }
     }

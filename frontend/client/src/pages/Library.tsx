@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 type SourceStatus = "ready" | "extracting" | "synthesizing" | "failed";
 
 const CAPTURE_API_URL = import.meta.env.VITE_CAPTURE_API_URL || "http://localhost:8080";
+const SAVED_ARTIFACTS_KEY = "learnloop-saved-artifacts";
 
 export default function Library() {
   const { setContext } = useCompanion();
@@ -21,6 +22,7 @@ export default function Library() {
   const [captures, setCaptures] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
   const [previewCapture, setPreviewCapture] = useState<any | null>(null);
+  const [savedArtifacts, setSavedArtifacts] = useState<any[]>([]);
   const uploadRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -32,6 +34,13 @@ export default function Library() {
       .then(data => setCaptures(Array.isArray(data) ? data : []))
       .catch(err => console.error("Failed to load captures", err));
   }, [setContext]);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SAVED_ARTIFACTS_KEY) || "[]");
+      setSavedArtifacts(Array.isArray(saved) ? saved : []);
+    } catch { setSavedArtifacts([]); }
+  }, []);
 
   const handleAddSource = () => uploadRef.current?.click();
 
@@ -208,18 +217,27 @@ export default function Library() {
         ))}
       </div>
 
+      {savedArtifacts.length > 0 && <section className="mb-8">
+        <h2 className="text-lg font-extrabold text-gray-900 mb-3">Saved artifacts</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {savedArtifacts.map(artifact => <button key={artifact.id} onClick={() => setLocation("/artifacts")} className="min-w-0 rounded-2xl border border-violet-100 bg-violet-50/40 p-5 text-left hover:border-violet-300 transition-colors">
+            <div className="flex items-center gap-4"><div className="w-12 h-12 shrink-0 rounded-xl bg-white flex items-center justify-center border border-violet-100"><Sparkles className="text-violet-600" size={22} /></div><div className="min-w-0"><h3 className="truncate font-bold text-gray-900">{artifact.title}</h3><p className="mt-1 text-xs font-bold uppercase tracking-wide text-violet-700">{String(artifact.artifact_type || "artifact").replace("_", " ")} · Saved artifact</p></div></div>
+          </button>)}
+        </div>
+      </section>}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {filteredSources.map((source: any) => (
           <div key={source.id}>
             <div 
-              className="p-5 rounded-2xl bg-white border border-gray-200 shadow-sm flex items-center justify-between hover:border-gray-300 transition-colors cursor-pointer" 
+              className="p-5 rounded-2xl bg-white border border-gray-200 shadow-sm flex min-w-0 items-center gap-4 hover:border-gray-300 transition-colors cursor-pointer" 
               onClick={() => setPreviewCapture(source)}
             >
-              <div className="flex items-center gap-4">
+              <div className="flex min-w-0 flex-1 items-center gap-4">
                 <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center shrink-0 border border-gray-100">
                   <FileText className="text-gray-500" size={24} />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <h3 className="font-bold text-gray-900 line-clamp-1">{source.title || "Untitled"}</h3>
                   <div className="flex items-center gap-3 mt-1 text-xs">
                     <span className="text-gray-500 font-medium uppercase tracking-wider">{source.capture_type || "DOCUMENT"}</span>
@@ -228,9 +246,9 @@ export default function Library() {
                   </div>
                 </div>
               </div>
-              <div className="flex flex-col items-end gap-1">
+              <div className="flex shrink-0 flex-col items-end gap-1 text-right">
                 {getStatusIcon(source.processing_status || "ready")}
-                <span className={`text-[10px] font-extrabold uppercase tracking-wide ${source.processing_status === "failed" ? "text-red-700" : "text-green-700"}`}>
+                <span className={`whitespace-nowrap text-[10px] font-extrabold uppercase tracking-wide ${source.processing_status === "failed" ? "text-red-700" : "text-green-700"}`}>
                   {getStatusText(source.processing_status || "ready")}
                 </span>
               </div>
@@ -263,8 +281,7 @@ export default function Library() {
                 <button 
                   onClick={(e) => { 
                     e.stopPropagation(); 
-                    localStorage.setItem("courseTargetId", previewCapture.id);
-                    setLocation(`/course-builder?captureId=${previewCapture.id}`); 
+                    setLocation(`/?generateCourse=1&captureId=${encodeURIComponent(previewCapture.id)}&sourceTitle=${encodeURIComponent(previewCapture.title || "Uploaded source")}`);
                   }}
                   className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 border border-gray-200 rounded-xl text-xs font-bold hover:bg-gray-50 transition-colors"
                 >

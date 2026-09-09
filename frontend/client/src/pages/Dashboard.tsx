@@ -30,7 +30,7 @@ import { useCompanion } from "@/contexts/CompanionContext";
 import { useDarwinity } from "@/contexts/DarwinityStoreContext";
 import { generate10LevelCourse } from "@/lib/courseGenerator";
 import { useEffect } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 
 const CAPTURE_API_URL = import.meta.env.VITE_CAPTURE_API_URL || "http://localhost:8080";
 
@@ -39,6 +39,7 @@ type ModalMode = null | "upload" | "paste" | "record" | "synthesize";
 export default function Dashboard() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
+  const search = useSearch();
   const { setContext } = useCompanion();
   const { state, dispatch } = useDarwinity();
   const [modalMode, setModalMode] = useState<ModalMode>(null);
@@ -61,6 +62,42 @@ export default function Dashboard() {
   useEffect(() => {
     setContext({ workspace: "Home" });
   }, [setContext]);
+
+  // A source preview can send learners here to use the same course generator.
+  // Keep the extracted PDF text in the editable prompt so they can tailor it first.
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    if (params.get("generateCourse") !== "1") return;
+
+    const captureId = params.get("captureId");
+    const sourceTitle = params.get("sourceTitle") || "Uploaded source";
+    setShowCourseModal(true);
+
+    if (!captureId) {
+      setCoursePrompt(sourceTitle);
+      return;
+    }
+
+    let cancelled = false;
+    fetch(`${CAPTURE_API_URL}/captures/${captureId}`, {
+      headers: { Authorization: "Bearer demo-user" },
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error("Could not load source");
+        return response.json();
+      })
+      .then((capture) => {
+        if (cancelled) return;
+        const title = capture.title || sourceTitle;
+        const content = capture.normalized_content || capture.original_content || "";
+        setCoursePrompt(content ? `Build a course from this source: ${title}\n\n${content}` : title);
+      })
+      .catch(() => {
+        if (!cancelled) setCoursePrompt(sourceTitle);
+      });
+
+    return () => { cancelled = true; };
+  }, [search]);
 
   const bootstrap = trpc.workspace.bootstrap.useQuery();
   const { data: sourcesData } = trpc.workspace.sources.useQuery(
@@ -92,8 +129,8 @@ export default function Dashboard() {
         const data = await response.json();
         newCourse = data.course;
         
-        if (!newCourse || newCourse.title === "Failed to Generate") {
-          throw new Error("AI Backend returned Failed to Generate fallback");
+        if (!newCourse || newCourse.title === "Failed to Generate" || !newCourse.lessons?.length || !newCourse.modules?.length) {
+          throw new Error("AI backend returned an empty course; using the source-driven local generator");
         }
 
         newCourse.sourceIds = selectedSourceIds.map(String);
@@ -368,7 +405,7 @@ export default function Dashboard() {
           {/* Grid of 8 Toolkit Actions */}
           <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-3">
             {[
-              { label: "Notes", sub: "Edit source notes", icon: FileText, color: "text-emerald-600 bg-emerald-50", target: "/spaces/1/pages/1" },
+              { label: "Notes", sub: "Create study notes", icon: FileText, color: "text-emerald-600 bg-emerald-50", target: "/artifacts?type=summary" },
               { label: "Mind map", sub: "Connect ideas", icon: Layers, color: "text-purple-600 bg-purple-50", target: "/artifacts?type=mindmap" },
               { label: "Flashcards", sub: "Recall until it sticks", icon: Brain, color: "text-blue-600 bg-blue-50", target: "/artifacts?type=flashcards" },
               { label: "Quizzes", sub: "Pressure practice", icon: Target, color: "text-amber-600 bg-amber-50", target: "/artifacts?type=key_concepts" },

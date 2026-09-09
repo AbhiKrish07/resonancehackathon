@@ -17,6 +17,7 @@ import StudyStats from "./pages/StudyStats";
 import Profile from "./pages/Profile";
 import SpaceOverview from "./pages/SpaceOverview";
 import PageEditor from "./pages/PageEditor";
+import LearningControlCenter from "./pages/LearningControlCenter";
 import { CompanionProvider } from "./contexts/CompanionContext";
 import { FloatingCompanion } from "./components/companion/FloatingCompanion";
 import { DarwinityStoreProvider } from "./contexts/DarwinityStoreContext";
@@ -39,6 +40,9 @@ function Router() {
   return (
     <Switch>
       <Route path="/onboarding" component={Onboarding} />
+      <Route path="/canvas/:spaceId/:pageId">
+        {(params) => <Workspace key={params?.pageId} />}
+      </Route>
       <Route path="/canvas" component={Workspace} />
       <Route>
         <DashboardLayout>
@@ -50,6 +54,7 @@ function Router() {
             <Route path={"/library"} component={Library} />
             <Route path={"/learn"} component={Learn} />
             <Route path={"/stats"} component={StudyStats} />
+            <Route path={"/learning-plan"} component={LearningControlCenter} />
             <Route path={"/profile"} component={Profile} />
             <Route path={"/spaces/:spaceId"} component={SpaceOverview} />
             <Route path={"/spaces/:spaceId/pages/:pageId"}>

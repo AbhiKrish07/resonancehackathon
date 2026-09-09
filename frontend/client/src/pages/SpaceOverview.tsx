@@ -98,6 +98,31 @@ export default function SpaceOverview() {
     setLocation(`/spaces/${space.id}/pages/${newPage.id}`);
   };
 
+  const handleCreateCanvas = () => {
+    const id = `canvas-${Date.now()}`;
+    const now = new Date().toISOString();
+    dispatch({
+      type: "CREATE_PAGE",
+      page: {
+        id,
+        spaceId: space.id,
+        title: "Untitled Canvas",
+        icon: "🧠",
+        templateId: "canvas",
+        favorite: false,
+        archived: false,
+        createdAt: now,
+        updatedAt: now,
+      }
+    });
+    dispatch({
+      type: "CREATE_BLOCK",
+      block: { id: `canvas-block-${Date.now()}`, pageId: id, parentId: null, type: "canvas", content: { version: 1, nodes: [], edges: [] }, order: 0 }
+    });
+    dispatch({ type: "SET_ACTIVE_PAGE", id });
+    setLocation(`/canvas/${space.id}/${id}`);
+  };
+
   const handleGenerateCourse = async () => {
     if (!space) return;
     setGenerating(true);
@@ -126,12 +151,12 @@ export default function SpaceOverview() {
         const data = await response.json();
         newCourse = data.course;
         
-        if (!newCourse || newCourse.title === "Failed to Generate") {
-          throw new Error("AI Backend returned Failed to Generate fallback");
+        if (!newCourse || newCourse.title === "Failed to Generate" || !newCourse.lessons?.length || !newCourse.modules?.length) {
+          throw new Error("AI backend returned an empty course; using the source-driven local generator");
         }
 
         newCourse.spaceId = space.id;
-        newCourse.sourceIds = space.captureIds || [];
+        newCourse.sourceIds = space.sourceIds || [];
         if (!newCourse.modules) newCourse.modules = [];
         if (!newCourse.lessons) newCourse.lessons = [];
         
@@ -164,7 +189,7 @@ export default function SpaceOverview() {
           coursePrompt,
           difficultyKey,
           courseGoal,
-          space.captureIds || []
+          space.sourceIds || []
         );
         newCourse.spaceId = space.id;
       }
@@ -225,7 +250,7 @@ export default function SpaceOverview() {
               <Button variant="ghost" size="sm" onClick={handleCreatePage} className="text-[#123d2d] font-bold">
                 <Plus size={16} className="mr-1" /> New Page
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => setLocation('/canvas')} className="text-purple-700 font-bold hover:text-purple-800 hover:bg-purple-50">
+              <Button variant="ghost" size="sm" onClick={handleCreateCanvas} className="text-purple-700 font-bold hover:text-purple-800 hover:bg-purple-50">
                 <Plus size={16} className="mr-1" /> New Canvas Space
               </Button>
             </div>
@@ -243,7 +268,7 @@ export default function SpaceOverview() {
               {spacePages.filter(p => !p.parentId).map(page => (
                 <div 
                   key={page.id}
-                  onClick={() => setLocation(`/spaces/${space.id}/pages/${page.id}`)}
+                  onClick={() => setLocation(page.templateId === "canvas" ? `/canvas/${space.id}/${page.id}` : `/spaces/${space.id}/pages/${page.id}`)}
                   className="p-5 rounded-2xl bg-white border border-gray-200 shadow-sm hover:border-gray-300 hover:shadow transition-all cursor-pointer group"
                 >
                   <div className="flex items-start gap-3">
@@ -367,8 +392,7 @@ export default function SpaceOverview() {
                 <button 
                   onClick={(e) => { 
                     e.stopPropagation(); 
-                    localStorage.setItem("courseTargetId", previewCapture.id);
-                    setLocation(`/course-builder?captureId=${previewCapture.id}`); 
+                    setLocation(`/?generateCourse=1&captureId=${encodeURIComponent(previewCapture.id)}&sourceTitle=${encodeURIComponent(previewCapture.title || "Uploaded source")}`);
                   }}
                   className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 border border-gray-200 rounded-xl text-xs font-bold hover:bg-gray-50 transition-colors"
                 >

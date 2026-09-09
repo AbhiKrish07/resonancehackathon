@@ -108,6 +108,7 @@ export type Course = {
   mastery?: {
     completedLessonIds: string[];
     completedLessons: number;
+    progress?: number;
     score?: number;
     xp?: number;
   };

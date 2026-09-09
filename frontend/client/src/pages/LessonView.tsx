@@ -198,19 +198,37 @@ export function LessonView() {
       } else {
         const course = darwinityState.courses.find(c => String(c.id) === String(courseIdParam));
         if (course) {
+          const completedLessonId = lessonIdParam || "";
+          const completedLessonIds = course.mastery?.completedLessonIds || [];
+          const alreadyCompleted = completedLessonIds.includes(completedLessonId);
+          const nextCompletedIds = alreadyCompleted ? completedLessonIds : [...completedLessonIds, completedLessonId];
+          const nextCompletedLessons = nextCompletedIds.length;
+          const progress = Math.round((nextCompletedLessons / Math.max(course.lessons.length, 1)) * 100);
           dispatch({
             type: "UPDATE_COURSE",
             id: course.id,
             patch: {
               mastery: {
                 ...course.mastery,
-                completedLessonIds: [...(course.mastery?.completedLessonIds || []), lessonIdParam].filter((id): id is string => Boolean(id)),
-                completedLessons: (course.mastery?.completedLessons || 0) + 1,
-                score: (course.mastery?.score || 0) + 10,
-                xp: (course.mastery?.xp || 0) + earnedXp
-              }
+                completedLessonIds: nextCompletedIds,
+                completedLessons: nextCompletedLessons,
+                progress,
+                score: (course.mastery?.score || 0) + (alreadyCompleted ? 0 : 10),
+                xp: (course.mastery?.xp || 0) + (alreadyCompleted ? 0 : earnedXp)
+              },
+              completedLessons: nextCompletedLessons,
+              progress,
+              currentLessonId: course.lessons.find(lesson => !nextCompletedIds.includes(lesson.id))?.id || course.currentLessonId
             }
           });
+          if (!alreadyCompleted) {
+            try {
+              const key = "learnloop-study-sessions";
+              const sessions = JSON.parse(localStorage.getItem(key) || "[]");
+              sessions.push({ date: new Date().toISOString(), courseId: course.id, courseTitle: course.title, xp: earnedXp + 10, minutes: course.lessons.find(lesson => lesson.id === completedLessonId)?.estimatedMinutes || 10 });
+              localStorage.setItem(key, JSON.stringify(sessions.slice(-500)));
+            } catch { /* Course progress is still retained if analytics storage is unavailable. */ }
+          }
         }
         setLocation(`/courses/${courseIdParam}`);
       }

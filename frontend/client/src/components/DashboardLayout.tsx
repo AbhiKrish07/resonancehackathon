@@ -38,7 +38,8 @@ import {
   Bot,
   PanelLeft,
   Sparkles,
-  Layers
+  Layers,
+  Target
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -56,6 +57,7 @@ const menuGroups = [
       { icon: Home, label: "Home", path: "/" },
       { icon: Layers, label: "Artifact Studio", path: "/artifacts" },
       { icon: SquareStack, label: "Canvas Workspace", path: "/canvas" },
+      { icon: Target, label: "Learning Plan", path: "/learning-plan" },
       { icon: BookOpen, label: "Library", path: "/library" },
     ]
   },

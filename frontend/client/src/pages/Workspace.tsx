@@ -1,4 +1,7 @@
 import { useMemo, useRef, useState, useEffect } from "react";
+import { useParams } from "wouter";
+import { useDarwinity } from "@/contexts/DarwinityStoreContext";
+import { useCompanion } from "@/contexts/CompanionContext";
 import {
   Archive,
   ArrowDownToLine,
@@ -163,6 +166,18 @@ const initialConnections: Connection[] = [
   { from: "models", to: "questions" },
 ];
 
+function loadCanvas(storageKey: string) {
+  try {
+    const saved = localStorage.getItem(storageKey);
+    if (!saved) return { notes: initialNotes, connections: initialConnections };
+    const parsed = JSON.parse(saved);
+    if (Array.isArray(parsed.notes) && Array.isArray(parsed.connections)) return parsed as { notes: Note[]; connections: Connection[] };
+  } catch {
+    // Keep the starter canvas available if browser storage is unavailable/corrupt.
+  }
+  return { notes: initialNotes, connections: initialConnections };
+}
+
 const iconButton = "icon-button";
 
 const EditorContent = ({ note, onUpdate }: { note: Note, onUpdate: (id: string, body: string) => void }) => {
@@ -187,8 +202,15 @@ const EditorContent = ({ note, onUpdate }: { note: Note, onUpdate: (id: string, 
 };
 
 export default function Workspace() {
-  const [notes, setNotes] = useState<Note[]>(initialNotes);
-  const [connections, setConnections] = useState<Connection[]>(initialConnections);
+  const { spaceId, pageId } = useParams();
+  const { state: store, dispatch } = useDarwinity();
+  const { setContext } = useCompanion();
+  const page = store.pages.find(item => item.id === pageId);
+  const space = store.spaces.find(item => item.id === (spaceId || page?.spaceId));
+  const canvasKey = `darwinity-canvas-${pageId || "main"}-v1`;
+  const [canvas] = useState(() => loadCanvas(canvasKey));
+  const [notes, setNotes] = useState<Note[]>(canvas.notes);
+  const [connections, setConnections] = useState<Connection[]>(canvas.connections);
   const [selectedId, setSelectedId] = useState("signal");
   const [activeTool, setActiveTool] = useState<"select" | "hand" | "note" | "connect">("select");
   const [linkStart, setLinkStart] = useState<string | null>(null);
@@ -202,6 +224,22 @@ export default function Workspace() {
   const [toast, setToast] = useState("Canvas ready");
   const [showToast, setShowToast] = useState(true);
   const boardRef = useRef<HTMLDivElement>(null);
+
+  // Canvas cards, links, and edits now survive navigation and browser reloads.
+  useEffect(() => {
+    try {
+      localStorage.setItem(canvasKey, JSON.stringify({ notes, connections }));
+    } catch {
+      setSaveState("Couldn’t save locally");
+    }
+  }, [notes, connections, canvasKey]);
+
+  useEffect(() => {
+    if (!page || !space) return;
+    dispatch({ type: "SET_ACTIVE_SPACE", id: space.id });
+    dispatch({ type: "SET_ACTIVE_PAGE", id: page.id });
+    setContext({ workspace: "Canvas", spaceId: space.id, pageId: page.id, selection: `${space.name} / ${page.title}` });
+  }, [page, space, dispatch, setContext]);
 
   const selected = notes.find((note) => note.id === selectedId) ?? notes[0];
   const visibleNotes = useMemo(() => {
@@ -355,6 +393,8 @@ export default function Workspace() {
         .topbar { height:64px; flex:none; display:flex; align-items:center; justify-content:space-between; padding:0 22px 0 20px; border-bottom:1px solid #e4e5df; background:rgba(248,248,244,.9); backdrop-filter:blur(18px); z-index:12; }
         .crumbs { display:flex; align-items:center; gap:11px; color:#848b82; font-size:13px; font-weight:600; }
         .crumbs .current { color:var(--ink); }
+        .canvas-title-input { min-width:0; max-width:260px; border:1px solid transparent; border-radius:7px; background:transparent; color:var(--ink); font:600 13px 'DM Sans'; padding:5px 7px; outline:0; }
+        .canvas-title-input:hover, .canvas-title-input:focus { border-color:#d9ddd3; background:#fff; }
         .crumb-icon { width:26px; height:26px; border-radius:8px; background:var(--lime); display:grid; place-items:center; color:var(--ink); }
         .top-actions { display:flex; align-items:center; gap:10px; }
         .top-search { width:188px; height:34px; border:1px solid #e0e1d9; border-radius:9px; background:#fff; display:flex; align-items:center; gap:8px; padding:0 10px; color:#929990; }
@@ -467,7 +507,8 @@ export default function Workspace() {
           <div className="crumbs">
             <div className="crumb-icon"><BookOpen size={14} strokeWidth={2.1} /></div>
             <span>Workspaces</span><ChevronDown size={13} />
-            <span>Personal OS</span><span>/</span><span className="current">Thinking in public</span>
+            <span>{space?.name || "Personal OS"}</span><span>/</span>
+            {page ? <input aria-label="Canvas title" className="canvas-title-input" value={page.title} onChange={(event) => dispatch({ type: "UPDATE_PAGE", id: page.id, patch: { title: event.target.value || "Untitled Canvas" } })} /> : <span className="current">Thinking in public</span>}
           </div>
           <div className="top-actions">
             <label className="top-search"><Search size={14} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search this space" /><kbd>⌘ K</kbd></label>
