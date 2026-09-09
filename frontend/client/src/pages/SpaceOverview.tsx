@@ -5,6 +5,7 @@ import { useParams, useLocation } from "wouter";
 import { FileText, Plus, BookOpen, Brain, Sparkles, FolderPlus, Loader2, Upload, Eye, X, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Page } from "@/types/darwinity";
+import { generate10LevelCourse } from "@/lib/courseGenerator";
 
 const CAPTURE_API_URL = import.meta.env.VITE_CAPTURE_API_URL || "http://localhost:8080";
 
@@ -101,48 +102,79 @@ export default function SpaceOverview() {
     if (!space) return;
     setGenerating(true);
     
-    // Gather content: from page blocks AND from uploaded captures
-    const pageContent = spacePages.map(p => {
-      const pBlocks = (state.blocks || []).filter(b => b.pageId === p.id);
-      return pBlocks.map(b => b.content?.text || "").join("\n");
-    }).join("\n\n");
-    
-    const captureContent = captures.map(c => 
-      `[${c.title}]\n${c.normalized_content || c.original_content || ""}`
-    ).join("\n\n");
-    
-    const combinedContent = [pageContent, captureContent].filter(Boolean).join("\n\n");
-    
-    if (!combinedContent.trim()) {
-      alert("No content found. Upload some PDFs or add text to pages first!");
-      setGenerating(false);
-      return;
-    }
-
     try {
       const stored = localStorage.getItem("learningProfile");
       const profile = stored ? JSON.parse(stored) : {};
       
-          const payload = {
-              content: combinedContent.slice(0, 100000), // use large context window (Groq supports 128k)
-          goal: profile.goal || "master",
-          time_budget: profile.timeBudget || "30min",
-          level: profile.level || "intermediate"
-      };
+      const coursePrompt = space.name;
+      const courseGoal = profile.goal || "Master the concepts of this space";
+      const difficultyKey = (profile.level || "intermediate").toLowerCase();
 
-      const courseRes = await fetch(`${CAPTURE_API_URL}/api/course/generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": "Bearer demo-user" },
-        body: JSON.stringify(payload)
-      });
-      if (!courseRes.ok) throw new Error("Failed to generate course");
-      const courseData = await courseRes.json();
+      let newCourse;
+      try {
+        const response = await fetch(`${CAPTURE_API_URL}/api/course/generate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: `Create a comprehensive course about: ${coursePrompt}. Goal: ${courseGoal}.`,
+            level: difficultyKey,
+            time_budget: "30min/day"
+          })
+        });
+        if (!response.ok) throw new Error("AI Generation failed");
+        
+        const data = await response.json();
+        newCourse = data.course;
+        
+        if (!newCourse || newCourse.title === "Failed to Generate") {
+          throw new Error("AI Backend returned Failed to Generate fallback");
+        }
 
-      if (courseData.course && courseData.course.id) {
-        // Also add to darwinity store so it shows up in UI
-        dispatch({ type: "CREATE_COURSE", course: { id: courseData.course.id, spaceId: space.id, title: space.name + " Course", description: courseData.course.description || "", modules: courseData.course.modules || [], lessons: courseData.course.lessons || [], sourceIds: [], learningGoal: courseData.course.learningGoal || "", estimatedMinutes: 0, readiness: 0, currentLessonId: courseData.course.currentLessonId || "", totalLessons: courseData.course.totalLessons || 0, completedLessons: 0, nextAction: "Start", updatedAt: new Date().toISOString(), progress: 0, status: "active", icon: "🚀", accent: "sky" } });
-        setLocation(`/courses/${courseData.course.id}`);
+        newCourse.spaceId = space.id;
+        newCourse.sourceIds = space.captureIds || [];
+        if (!newCourse.modules) newCourse.modules = [];
+        if (!newCourse.lessons) newCourse.lessons = [];
+        
+        const currentCount = newCourse.lessons.length;
+        if (currentCount < 10) {
+          const fallback = generate10LevelCourse(coursePrompt, difficultyKey, courseGoal, []);
+          for (let i = currentCount; i < 10; i++) {
+            const fbLesson = fallback.lessons[i];
+            const fbModule = fallback.modules[i];
+            if (fbLesson && fbModule) {
+              const newLesId = `les-${newCourse.id}-padded-${i+1}`;
+              const newModId = `mod-${newCourse.id}-padded-${i+1}`;
+              
+              fbLesson.id = newLesId;
+              newCourse.lessons.push(fbLesson);
+              
+              fbModule.id = newModId;
+              fbModule.lessonIds = [newLesId];
+              newCourse.modules.push(fbModule);
+            }
+          }
+        }
+        
+        newCourse.totalLessons = 10;
+        newCourse.icon = "🚀";
+        newCourse.accent = "sky";
+      } catch (err) {
+        console.warn("AI Generation failed, falling back to local generator", err);
+        newCourse = generate10LevelCourse(
+          coursePrompt,
+          difficultyKey,
+          courseGoal,
+          space.captureIds || []
+        );
+        newCourse.spaceId = space.id;
       }
+
+      dispatch({
+        type: "CREATE_COURSE",
+        course: newCourse
+      });
+
+      setLocation(`/courses/${newCourse.id}`);
     } catch (err) {
       console.error("Course generation failed", err);
       alert("Failed to generate course. Check console for details.");
