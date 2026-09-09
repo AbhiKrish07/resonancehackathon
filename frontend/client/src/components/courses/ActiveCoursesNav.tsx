@@ -17,7 +17,7 @@ export function ActiveCoursesNav() {
       <div className="flex items-center justify-between px-3 mb-2">
         <button 
           onClick={() => setExpanded(!expanded)} 
-          className="flex items-center gap-1 text-xs font-bold text-gray-500 uppercase tracking-widest hover:text-gray-900 transition-colors"
+          className="flex items-center gap-1 text-xs font-bold text-[#8b8e9f] uppercase tracking-widest hover:text-white transition-colors"
         >
           {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           Active Courses
@@ -27,27 +27,27 @@ export function ActiveCoursesNav() {
       {expanded && (
         <div className="space-y-1">
           {activeCourses.length === 0 ? (
-            <div className="px-5 py-2 text-sm text-gray-400 italic">No active courses.</div>
+            <div className="px-5 py-2 text-sm text-[#717585] italic">No active courses.</div>
           ) : (
             activeCourses.map(course => (
               <div 
                 key={course.id}
                 onClick={() => setLocation(`/courses/${course.id}`)}
                 className={`group px-3 py-2 rounded-lg cursor-pointer transition-colors ${
-                  state.activeCourseId === course.id ? "bg-[#f1f5f2] border border-[#e1e8e2]" : "hover:bg-gray-100 border border-transparent"
+                  state.activeCourseId === course.id ? "bg-[#25272e] border border-[#363945]" : "hover:bg-[#25272e] border border-transparent"
                 }`}
               >
                 <div className="flex items-center justify-between mb-1.5">
                   <div className="flex items-center gap-2 overflow-hidden">
                     <span className="shrink-0">{course.icon}</span>
-                    <span className={`truncate text-sm ${state.activeCourseId === course.id ? 'font-bold text-[#123d2d]' : 'text-gray-700'}`}>
+                    <span className={`truncate text-sm ${state.activeCourseId === course.id ? 'font-bold text-white' : 'text-[#d1d5db]'}`}>
                       {course.title}
                     </span>
                   </div>
-                  <span className="text-xs font-extrabold text-gray-400">{course.progress}%</span>
+                  <span className="text-xs font-extrabold text-white">{course.progress}%</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="flex-1 h-1.5 bg-[#2a2c35] rounded-full overflow-hidden">
                     <div 
                       className="h-full rounded-full transition-all" 
                       style={{ width: `${course.progress}%`, backgroundColor: course.accent }} 
@@ -55,7 +55,7 @@ export function ActiveCoursesNav() {
                   </div>
                   <button 
                     onClick={(e) => { e.stopPropagation(); setLocation(`/courses/${course.id}`); }}
-                    className="opacity-0 group-hover:opacity-100 flex items-center gap-1 text-[10px] font-bold text-[#123d2d] uppercase tracking-wide transition-opacity"
+                    className="opacity-0 group-hover:opacity-100 flex items-center gap-1 text-[10px] font-bold text-[#c8f52c] uppercase tracking-wide transition-opacity"
                   >
                     <PlayCircle size={12} /> Resume
                   </button>

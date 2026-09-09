@@ -1,237 +1,571 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useAuth } from "@/_core/hooks/useAuth";
-import { startLogin } from "@/const";
-import { trpc } from "@/lib/trpc";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
-import { Streamdown } from "streamdown";
-import { ArrowDownRight, ArrowLeft, ArrowRight, BookOpen, ChevronDown, ChevronRight, Command, FileText, FolderOpen, Grip, Link2, Maximize2, MessageCircle, Minus, MoreHorizontal, Move, Plus, Search, Sparkles, StickyNote, Upload, WandSparkles, X, ZoomIn, ZoomOut, Grid2X2, Headphones, GraduationCap, Award, ChevronLeft, UserRound, Clock3 } from "lucide-react";
+import { useMemo, useRef, useState, useEffect } from "react";
+import {
+  Archive,
+  ArrowDownToLine,
+  ArrowUpRight,
+  Bold,
+  BookOpen,
+  Check,
+  ChevronDown,
+  CircleHelp,
+  Cloud,
+  Command,
+  Copy,
+  FileText,
+  Hand,
+  Highlighter,
+  Italic,
+  LayoutGrid,
+  Link2,
+  List,
+  Lock,
+  Maximize2,
+  Menu,
+  MessageCircle,
+  MoreHorizontal,
+  Move,
+  PanelRight,
+  Plus,
+  Redo2,
+  Search,
+  Send,
+  Share2,
+  SlidersHorizontal,
+  Sparkles,
+  SquarePen,
+  StickyNote,
+  Strikethrough,
+  Trash2,
+  Underline,
+  Undo2,
+  Users,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 
-type Accent = "mint" | "lilac" | "peach" | "sky" | "sand";
-type CardType = "note" | "quote" | "question" | "insight" | "summary" | "media";
-type CanvasCard = { id: number; title: string; body: string; cardType: CardType; accent: Accent; x: number; y: number; width: number; height: number; sourceId?: number; mediaUrl?: string; mediaType?: string };
-type CanvasLink = { id: number; fromCardId: number; toCardId: number; label?: string | null };
-type Source = { id: number; title: string; type: string; meta: string; excerpt: string; color: string };
+type Note = {
+  id: string;
+  title: string;
+  body: string;
+  tag: string;
+  tagColor: string;
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  updated: string;
+  pinned?: boolean;
+};
 
-const starterCards: CanvasCard[] = [
-  { id: 1, title: "Learning is a change in mental models", body: "A working thesis captured from the reading. Keep the wording close to the source, then add your own interpretation below.", cardType: "quote", accent: "mint", x: 70, y: 220, width: 280, height: 188, sourceId: 1 },
-  { id: 2, title: "Models become useful when they connect", body: "The value of an idea often comes from the bridges it creates between different observations.", cardType: "insight", accent: "lilac", x: 430, y: 350, width: 282, height: 188, sourceId: 1 },
-  { id: 3, title: "What changes when the source is local?", body: "Question for the next pass through the research. Add evidence, counterexamples, and a synthesis card.", cardType: "question", accent: "peach", x: 830, y: 205, width: 280, height: 180, sourceId: 2 },
-  { id: 4, title: "The computer as a thinking partner", body: "A pattern across three excerpts: tools become formative when they let people externalize, revisit, and rearrange ideas.", cardType: "note", accent: "sky", x: 1180, y: 430, width: 286, height: 192, sourceId: 3 },
-  { id: 5, title: "A small synthesis", body: "Better learning may be less about collecting more information and more about seeing relationships clearly.", cardType: "summary", accent: "sand", x: 1200, y: 110, width: 270, height: 172, sourceId: 1 },
+type Group = {
+  id: string;
+  title: string;
+  caption: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color: string;
+  border: string;
+};
+
+type Connection = { from: string; to: string };
+
+const initialNotes: Note[] = [
+  {
+    id: "signal",
+    title: "The signal is in the edges",
+    body: `<p>Most meaningful ideas don't arrive as finished thoughts. They surface in the <strong>relationship between two things</strong> that were previously kept apart.</p><p>I'm collecting examples of this in books, product teams, and my own research practice.</p><ul><li>Notice the unexpected adjacency</li><li>Write down the tension before resolving it</li><li>Give the idea enough room to develop</li></ul>`,
+    tag: "Core idea",
+    tagColor: "#d8f2e3",
+    x: 112,
+    y: 222,
+    width: 246,
+    height: 236,
+    updated: "Edited just now",
+    pinned: true,
+  },
+  {
+    id: "friction",
+    title: "Friction is a creative material",
+    body: `<p>When a workflow feels slightly difficult, it may be revealing a boundary worth exploring rather than asking to be smoothed away.</p><blockquote>Good tools don't remove every edge. They make the useful edges visible.</blockquote><p><mark>Question:</mark> where does a little resistance create more thoughtful work?</p>`,
+    tag: "Product notes",
+    tagColor: "#f8cdc0",
+    x: 414,
+    y: 174,
+    width: 254,
+    height: 222,
+    updated: "Edited 12 min ago",
+  },
+  {
+    id: "models",
+    title: "Mental models are portable scaffolds",
+    body: `<p>A mental model is not a conclusion. It is a temporary structure for seeing more clearly.</p><p>The best ones are:</p><ul><li>Specific enough to use</li><li>Loose enough to adapt</li><li>Memorable enough to share</li></ul>`,
+    tag: "Reading notes",
+    tagColor: "#e9e5fb",
+    x: 720,
+    y: 132,
+    width: 246,
+    height: 222,
+    updated: "Edited yesterday",
+  },
+  {
+    id: "studio",
+    title: "Build a studio, not a storage unit",
+    body: `<p>A workspace should make it easy to move from collecting to composing.</p><p>That means:</p><ul><li>Low-friction capture</li><li>Visible relationships</li><li>A comfortable place to return and edit</li></ul>`,
+    tag: "Working thesis",
+    tagColor: "#d4edf5",
+    x: 177,
+    y: 555,
+    width: 258,
+    height: 214,
+    updated: "Edited 2 days ago",
+  },
+  {
+    id: "weekly",
+    title: "Weekly synthesis ritual",
+    body: `<p>Every Friday, move three fragments from the margins into the center.</p><ol><li>Review loose notes</li><li>Group by a shared tension</li><li>Write one sentence that surprises you</li></ol>`,
+    tag: "Rituals",
+    tagColor: "#f0e6c4",
+    x: 508,
+    y: 490,
+    width: 242,
+    height: 195,
+    updated: "Edited 4 days ago",
+  },
+  {
+    id: "questions",
+    title: "Questions worth carrying",
+    body: `<p>What if the goal of a notes app isn't retrieval, but better questions?</p><p>What kind of interface gives unfinished thoughts enough dignity to stay unfinished?</p>`,
+    tag: "Open loops",
+    tagColor: "#ece4cf",
+    x: 812,
+    y: 492,
+    width: 250,
+    height: 188,
+    updated: "Edited 1 week ago",
+  },
 ];
 
-const starterSources: Source[] = [
-  { id: 1, title: "Point of View Is Worth 80 IQ Points", type: "Book excerpt", meta: "Alan Kay · 8 highlights", excerpt: "Learning happens through the improvement of our mental models and computers are the best way to mediate this kind of learning.", color: "#d9f4e8" },
-  { id: 2, title: "The Design of Everyday Things", type: "PDF document", meta: "Don Norman · 12 highlights", excerpt: "Good design makes the actions we can take visible and the results of our actions intelligible.", color: "#f8dfd5" },
-  { id: 3, title: "Open Notebook research thread", type: "SurfSense import", meta: "14 sources · synced today", excerpt: "A connected collection of research notes, citations, and questions gathered across the web.", color: "#e5def8" },
+const groups: Group[] = [
+  { id: "observe", title: "01  OBSERVE", caption: "What keeps catching my attention", x: 72, y: 78, width: 620, height: 404, color: "#f7eee5", border: "#ead1bf" },
+  { id: "compose", title: "02  COMPOSE", caption: "Turn fragments into a point of view", x: 42, y: 512, width: 706, height: 292, color: "#eef4ed", border: "#cddfcd" },
+  { id: "carry", title: "03  CARRY FORWARD", caption: "Questions that deserve another pass", x: 756, y: 74, width: 350, height: 732, color: "#f0eff8", border: "#d8d3ee" },
 ];
 
-const groups = [
-  { title: "Why models matter", x: 35, y: 155, w: 755, h: 465, color: "#d7f1e7" },
-  { title: "Learning through making", x: 790, y: 80, w: 740, h: 555, color: "#e5def8" },
-  { title: "Questions to carry forward", x: 1010, y: 665, w: 495, h: 300, color: "#f8e1d9" },
+const initialConnections: Connection[] = [
+  { from: "signal", to: "friction" },
+  { from: "friction", to: "models" },
+  { from: "signal", to: "studio" },
+  { from: "studio", to: "weekly" },
+  { from: "weekly", to: "questions" },
+  { from: "models", to: "questions" },
 ];
 
-function CanvasCardView({ card, selected, onSelect, onMove }: { card: CanvasCard; selected: boolean; onSelect: () => void; onMove: (id: number, x: number, y: number) => void }) {
-  const drag = useRef<{ dx: number; dy: number } | null>(null);
-  const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    event.stopPropagation();
-    const rect = event.currentTarget.getBoundingClientRect();
-    drag.current = { dx: event.clientX - rect.left, dy: event.clientY - rect.top };
-    event.currentTarget.setPointerCapture(event.pointerId);
-    onSelect();
-  };
-  const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!drag.current) return;
-    const stage = event.currentTarget.closest("[data-canvas-stage]") as HTMLElement | null;
-    if (!stage) return;
-    const bounds = stage.getBoundingClientRect();
-    const zoom = Number(stage.dataset.zoom || 1);
-    const x = (event.clientX - bounds.left) / zoom - drag.current.dx / zoom;
-    const y = (event.clientY - bounds.top) / zoom - drag.current.dy / zoom;
-    onMove(card.id, Math.max(0, x), Math.max(0, y));
-  };
-  const onPointerUp = () => { drag.current = null; };
-  return <div className={`canvas-card card-${card.accent} ${selected ? "is-selected" : ""}`} style={{ left: card.x, top: card.y, width: card.width, minHeight: card.height }} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
-    <div className="card-grip"><Grip size={14} /><span>{card.cardType}</span><MoreHorizontal size={16} /></div>
-    <h3>{card.title}</h3>
-    {card.mediaUrl && card.mediaType?.startsWith("image/") && <img src={card.mediaUrl} alt={card.title} style={{width: '100%', borderRadius: '4px', marginTop: '8px'}} />}
-    {card.mediaUrl && card.mediaType?.startsWith("video/") && <video src={card.mediaUrl} controls style={{width: '100%', borderRadius: '4px', marginTop: '8px'}} />}
-    <p>{card.body}</p>
-    {card.sourceId && <div className="card-source"><BookOpen size={13} /> Source passage linked</div>}
-  </div>;
-}
+const iconButton = "icon-button";
+
+const EditorContent = ({ note, onUpdate }: { note: Note, onUpdate: (id: string, body: string) => void }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    if (ref.current && ref.current.innerHTML !== note.body) {
+      ref.current.innerHTML = note.body;
+    }
+  }, [note.id]);
+  
+  return (
+    <div
+      ref={ref}
+      className="editor-body"
+      contentEditable
+      suppressContentEditableWarning
+      onInput={(e) => onUpdate(note.id, e.currentTarget.innerHTML)}
+      onBlur={(e) => onUpdate(note.id, e.currentTarget.innerHTML)}
+    />
+  );
+};
 
 export default function Workspace() {
-  const { user, isAuthenticated, loading } = useAuth();
-  const [cards, setCards] = useState<CanvasCard[]>(starterCards);
-  const [links, setLinks] = useState<CanvasLink[]>([{ id: 1, fromCardId: 1, toCardId: 2 }, { id: 2, fromCardId: 2, toCardId: 3 }, { id: 3, fromCardId: 3, toCardId: 4 }, { id: 4, fromCardId: 5, toCardId: 2 }]);
-  const [selectedId, setSelectedId] = useState(1);
-  const [zoom, setZoom] = useState(0.78);
-  const [pan, setPan] = useState({ x: 90, y: 15 });
-  const [activePanel, setActivePanel] = useState<"inspector" | "sources" | "ai">("inspector");
-  const [messages, setMessages] = useState<{role: string, content: string}[]>([{ role: 'assistant', content: 'Hello! I am your Canvas AI. How can I help you explore your ideas today?' }]);
-  const [input, setInput] = useState("");
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
-  const askAi = () => { if (!input.trim()) return; setMessages(p => [...p, { role: 'user', content: input }]); setTimeout(() => { setMessages(p => [...p, { role: 'assistant', content: 'This is a simulated response based on your canvas context. I can help synthesize these notes for you!' }]); }, 1000); setInput(""); };
-  const [searchOpen, setSearchOpen] = useState(false);
+  const [notes, setNotes] = useState<Note[]>(initialNotes);
+  const [connections, setConnections] = useState<Connection[]>(initialConnections);
+  const [selectedId, setSelectedId] = useState("signal");
+  const [activeTool, setActiveTool] = useState<"select" | "hand" | "note" | "connect">("select");
+  const [linkStart, setLinkStart] = useState<string | null>(null);
+  const [showInspector, setShowInspector] = useState(true);
   const [search, setSearch] = useState("");
-  const [commandOpen, setCommandOpen] = useState(false);
-  const [isPanning, setIsPanning] = useState(false);
-  const panStart = useRef({ x: 0, y: 0, px: 0, py: 0 });
-  const [workspaceId, setWorkspaceId] = useState<number | null>(null);
-  const [authSettled, setAuthSettled] = useState(false);
-  const [canvasId, setCanvasId] = useState<number | null>(null);
-  const bootstrap = trpc.workspace.bootstrap.useQuery(undefined, { enabled: isAuthenticated });
-  const canvasQuery = trpc.workspace.canvas.useQuery({ workspaceId: workspaceId ?? 0, canvasId: canvasId ?? undefined }, { enabled: Boolean(workspaceId) });
-  const sourcesQuery = trpc.workspace.sources.useQuery({ workspaceId: workspaceId ?? 0 }, { enabled: Boolean(workspaceId) });
-  const activeSources = sourcesQuery.data?.length ? sourcesQuery.data : starterSources;
-  const updateCard = trpc.workspace.updateCard.useMutation();
-  const deleteCard = trpc.workspace.deleteCard.useMutation();
-  const createCard = trpc.workspace.createCard.useMutation();
-  const createNote = trpc.workspace.createNote.useMutation();
-  const createSource = trpc.workspace.createSource.useMutation();
-  const aiMutation = trpc.workspace.ai.useMutation();
-  const createSyncRun = trpc.workspace.createSyncRun.useMutation();
-  const handleUploadClick = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'application/pdf,image/*,audio/*';
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file || !workspaceId) return;
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const base64 = (event.target?.result as string).split(',')[1];
-        toast(`Uploading ${file.name}...`);
-        createSource.mutate({ workspaceId, title: file.name, fileName: file.name, mimeType: file.type, fileBase64: base64, sourceType: file.type.includes('pdf') ? 'pdf' : file.type.includes('image') ? 'image' : 'document' }, {
-          onSuccess: () => { toast("Source added and sent to backend processing!"); sourcesQuery.refetch(); }
-        });
-      };
-      reader.readAsDataURL(file);
-    };
-    input.click();
-  };
-  
-  const handleAddMediaCard = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*,video/*';
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const dataUrl = event.target?.result as string;
-        const next: CanvasCard = { id: Date.now(), title: file.name, body: "", cardType: "media", accent: "mint", x: 420 - pan.x / zoom, y: 260 - pan.y / zoom, width: 320, height: 240, mediaUrl: dataUrl, mediaType: file.type };
-        setCards((current: CanvasCard[]) => [...current, next]);
-        setSelectedId(next.id);
-        if (canvasId) createCard.mutate({ canvasId, title: next.title, body: next.body, cardType: next.cardType, accent: next.accent, x: next.x, y: next.y });
-      };
-      reader.readAsDataURL(file);
-    };
-    input.click();
-  };
-  const moveCard = trpc.workspace.moveCard.useMutation();
-  const updateViewport = trpc.workspace.updateViewport.useMutation();
-  const searchQuery = trpc.workspace.search.useQuery({ workspaceId: workspaceId ?? 0, query: search }, { enabled: Boolean(workspaceId && search.length > 1) });
+  const [zoom, setZoom] = useState(0.78);
+  const [pan, setPan] = useState({ x: 30, y: 28 });
+  const [dragging, setDragging] = useState<{ id: string; dx: number; dy: number } | null>(null);
+  const [panning, setPanning] = useState<{ x: number; y: number; px: number; py: number } | null>(null);
+  const [saveState, setSaveState] = useState("Saved locally");
+  const [toast, setToast] = useState("Canvas ready");
+  const [showToast, setShowToast] = useState(true);
+  const boardRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => setAuthSettled(true), 900);
-    return () => window.clearTimeout(timer);
-  }, []);
-  useEffect(() => {
-    if (bootstrap.data?.id) { setWorkspaceId(bootstrap.data.id); }
-  }, [bootstrap.data]);
-  useEffect(() => {
-    if (canvasQuery.data?.canvas) {
-      setCanvasId(canvasQuery.data.canvas.id);
-      if (canvasQuery.data.cards.length) setCards(canvasQuery.data.cards as CanvasCard[]);
-      if (canvasQuery.data.links.length) setLinks(canvasQuery.data.links as CanvasLink[]);
-      setZoom(canvasQuery.data.canvas.zoom);
-      setPan({ x: canvasQuery.data.canvas.viewportX, y: canvasQuery.data.canvas.viewportY });
+  const selected = notes.find((note) => note.id === selectedId) ?? notes[0];
+  const visibleNotes = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return notes;
+    return notes.filter((note) => `${note.title} ${note.tag} ${note.body}`.toLowerCase().includes(query));
+  }, [notes, search]);
+
+  const notify = (message: string) => {
+    setToast(message);
+    setShowToast(true);
+    window.setTimeout(() => setShowToast(false), 2600);
+  };
+
+  const updateNote = (id: string, patch: Partial<Note>) => {
+    setNotes((current) => current.map((note) => (note.id === id ? { ...note, ...patch, updated: "Saving…" } : note)));
+    setSaveState("Saving…");
+    window.setTimeout(() => {
+      setNotes((current) => current.map((note) => (note.id === id ? { ...note, updated: "Edited just now" } : note)));
+      setSaveState("Saved locally");
+    }, 550);
+  };
+
+  const addNote = (x = 540, y = 320) => {
+    const id = `note-${Date.now()}`;
+    const next: Note = {
+      id,
+      title: "Untitled thought",
+      body: "<p>Start writing here…</p>",
+      tag: "New note",
+      tagColor: "#d8f2e3",
+      x,
+      y,
+      width: 246,
+      height: 190,
+      updated: "Edited just now",
+    };
+    setNotes((current) => [...current, next]);
+    setSelectedId(id);
+    setActiveTool("select");
+    notify("New note added to the canvas");
+  };
+
+  const boardPoint = (event: React.PointerEvent) => {
+    const rect = boardRef.current?.getBoundingClientRect();
+    if (!rect) return { x: 420, y: 320 };
+    return {
+      x: Math.max(24, Math.round((event.clientX - rect.left - pan.x) / zoom - 120)),
+      y: Math.max(72, Math.round((event.clientY - rect.top - pan.y) / zoom - 80)),
+    };
+  };
+
+  const handleBoardPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) return;
+    if (activeTool === "note") {
+      const point = boardPoint(event);
+      addNote(point.x, point.y);
+      return;
     }
-  }, [canvasQuery.data]);
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setCommandOpen(true); }
-      if (event.key === "/" && document.activeElement?.tagName !== "INPUT") { event.preventDefault(); setSearchOpen(true); }
-      if (event.key === "Escape") { setCommandOpen(false); setSearchOpen(false); }
-    };
-    window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
-  const selected = cards.find((card: CanvasCard) => card.id === selectedId) ?? cards[0];
-  const syncRuns = trpc.workspace.syncRuns.useQuery({ workspaceId: workspaceId ?? 0 }, { enabled: Boolean(workspaceId) });
-  const selectedSource = activeSources.find((source: any) => source.id === selected?.sourceId) ?? activeSources[0];
-  const filteredCards = useMemo(() => search.length > 1 ? cards.filter((card: CanvasCard) => `${card.title} ${card.body}`.toLowerCase().includes(search.toLowerCase())) : cards, [cards, search]);
-  const handleMove = (id: number, x: number, y: number) => {
-    setCards((current: CanvasCard[]) => current.map((card: CanvasCard) => card.id === id ? { ...card, x, y } : card));
-    if (canvasId) moveCard.mutate({ cardId: id, x, y });
+    if (activeTool === "hand" || event.button === 1) {
+      setPanning({ x: pan.x, y: pan.y, px: event.clientX, py: event.clientY });
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
   };
-  const handleStagePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    if ((event.target as HTMLElement).closest(".canvas-card")) return;
-    setIsPanning(true); panStart.current = { x: event.clientX, y: event.clientY, px: pan.x, py: pan.y }; event.currentTarget.setPointerCapture(event.pointerId);
-  };
-  const handleStagePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!isPanning) return; setPan({ x: panStart.current.px + event.clientX - panStart.current.x, y: panStart.current.py + event.clientY - panStart.current.y });
-  };
-  const finishPan = () => { setIsPanning(false); if (canvasId) updateViewport.mutate({ canvasId, x: pan.x, y: pan.y, zoom }); };
-  const addCard = () => {
-    const next: CanvasCard = { id: Date.now(), title: "New idea", body: "Write a thought, question, or evidence here…", cardType: "note", accent: "mint", x: 420 - pan.x / zoom, y: 260 - pan.y / zoom, width: 270, height: 170 };
-    setCards((current: CanvasCard[]) => [...current, next]); setSelectedId(next.id); setCommandOpen(false);
-    if (canvasId) createCard.mutate({ canvasId, title: next.title, body: next.body, cardType: next.cardType, accent: next.accent, x: next.x, y: next.y });
-  };
-  const changeZoom = (delta: number) => { const next = Math.max(0.45, Math.min(1.35, zoom + delta)); setZoom(next); if (canvasId) updateViewport.mutate({ canvasId, x: pan.x, y: pan.y, zoom: next }); };
 
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const handleBoardPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (dragging) {
+      const rect = boardRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const x = Math.max(20, Math.round((event.clientX - rect.left - pan.x) / zoom - dragging.dx));
+      const y = Math.max(60, Math.round((event.clientY - rect.top - pan.y) / zoom - dragging.dy));
+      setNotes((current) => current.map((note) => (note.id === dragging.id ? { ...note, x, y } : note)));
+    }
+    if (panning) {
+      setPan({ x: panning.x + event.clientX - panning.px, y: panning.y + event.clientY - panning.py });
+    }
+  };
 
-  if (loading && !authSettled) return <div className="app-loading"><div className="loading-mark">K</div><p>Opening your garden…</p></div>;
-  if (!isAuthenticated) return <div className="welcome-screen"><div className="welcome-orbit"><div className="orbit-dot dot-one" /><div className="orbit-dot dot-two" /><div className="welcome-core">K</div></div><p className="eyebrow">A quieter way to think</p><h1>Make the shape of your thinking visible.</h1><p className="welcome-copy">A calm, visual workspace for collecting sources, connecting ideas, and returning to the questions that matter.</p><Button onClick={() => startLogin()} className="welcome-button">Enter your garden <ArrowRight size={16} /></Button></div>;
+  const stopPointerWork = () => {
+    setDragging(null);
+    setPanning(null);
+  };
 
-  return <div className="knowledge-app w-screen h-screen flex flex-col overflow-hidden m-0 p-0 absolute inset-0">
-    <div className="workspace flex-1 flex h-full w-full relative">
-        <div className="page-content h-full w-full">
-      <main className="canvas-shell h-full w-full">
-        <div className="canvas-toolbar absolute top-4 left-4 right-4 z-50 flex justify-between bg-white/90 backdrop-blur-md rounded-xl shadow-sm p-2 border border-gray-100"><div className="toolbar-left flex gap-1"><button className="tool-button selected"><Move size={15} /></button><button className="tool-button" onClick={addCard}><StickyNote size={15} /></button><button className="tool-button" onClick={handleAddMediaCard}><Upload size={15} /></button><button className="tool-button"><ArrowDownRight size={15} /></button><span className="toolbar-divider" /><button className="tool-button" onClick={() => setCommandOpen(true)}><Plus size={15} /></button></div><div className="toolbar-center flex items-center"><span className="board-state"><span className="state-dot" /> Live canvas</span></div><div className="toolbar-right flex gap-1 items-center"><button className="tool-button" onClick={() => setZoom(0.78)}><Maximize2 size={15} /></button><button className="tool-button" onClick={() => changeZoom(-0.1)}><ZoomOut size={15} /></button><span className="zoom-value px-2 font-bold text-xs">{Math.round(zoom * 100)}%</span><button className="tool-button" onClick={() => changeZoom(0.1)}><ZoomIn size={15} /></button></div></div>
-        <div className={`canvas-viewport ${isPanning ? "is-panning" : ""}`} data-canvas-stage data-zoom={zoom} onPointerDown={handleStagePointerDown} onPointerMove={handleStagePointerMove} onPointerUp={finishPan} onPointerLeave={finishPan}>
-          <div className="canvas-grid" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}>
-            {groups.map(group => <div key={group.title} className="card-group" style={{ left: group.x, top: group.y, width: group.w, height: group.h, background: group.color }}><div className="group-title">{group.title}<MoreHorizontal size={16} /></div></div>)}
-            <svg className="link-layer" width="1700" height="1100" aria-hidden="true"><defs><marker id="canvas-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#9eb6a6" /></marker></defs>{links.map((link: CanvasLink) => { const from = cards.find((card: CanvasCard) => card.id === link.fromCardId); const to = cards.find((card: CanvasCard) => card.id === link.toCardId); if (!from || !to) return null; const x1 = from.x + from.width; const y1 = from.y + from.height / 2; const x2 = to.x; const y2 = to.y + to.height / 2; const bend = Math.max(50, Math.abs(x2 - x1) / 2); return <path key={link.id} d={`M${x1} ${y1} C${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`} markerEnd="url(#canvas-arrow)" />; })}</svg>
-            {filteredCards.map((card: CanvasCard) => <CanvasCardView key={card.id} card={card} selected={card.id === selectedId} onSelect={() => { setSelectedId(card.id); setActivePanel("inspector"); }} onMove={handleMove} />)}
-          </div>
+  const handleCardPointerDown = (event: React.PointerEvent<HTMLDivElement>, note: Note) => {
+    if (activeTool === "connect") return;
+    event.stopPropagation();
+    const rect = boardRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setDragging({
+      id: note.id,
+      dx: (event.clientX - rect.left - pan.x) / zoom - note.x,
+      dy: (event.clientY - rect.top - pan.y) / zoom - note.y,
+    });
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleCardClick = (note: Note) => {
+    if (activeTool === "connect") {
+      if (!linkStart) {
+        setLinkStart(note.id);
+        notify("Choose another note to connect");
+      } else if (linkStart !== note.id) {
+        setConnections((current) => [...current, { from: linkStart, to: note.id }]);
+        setLinkStart(null);
+        setActiveTool("select");
+        notify("Connection added");
+      }
+      return;
+    }
+    setSelectedId(note.id);
+  };
+
+  const removeSelected = () => {
+    if (notes.length <= 1) return;
+    const next = notes.filter((note) => note.id !== selected.id);
+    setNotes(next);
+    setConnections((current) => current.filter((connection) => connection.from !== selected.id && connection.to !== selected.id));
+    setSelectedId(next[0].id);
+    notify("Note removed");
+  };
+
+  const zoomBy = (amount: number) => setZoom((current) => Math.min(1.25, Math.max(0.45, Number((current + amount).toFixed(2)))));
+
+  const format = (command: string, value?: string) => {
+    document.execCommand(command, false, value);
+    setSaveState("Saving…");
+    window.setTimeout(() => setSaveState("Saved locally"), 450);
+  };
+
+  const notePosition = (id: string) => {
+    const note = notes.find((item) => item.id === id);
+    return note ? { x: note.x, y: note.y, width: note.width ?? 246, height: note.height ?? 200 } : { x: 0, y: 0, width: 246, height: 200 };
+  };
+
+  return (
+    <div className="mindspace-shell">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+        :root { --ink:#1e2a22; --muted:#7e857c; --line:#dedfd6; --paper:#f8f8f4; --lime:#d9fa62; --lime-deep:#b7d928; --sidebar:#f4f4ef; --panel:#fbfbf8; --ease:cubic-bezier(.23,1,.32,1); }
+        * { box-sizing:border-box; }
+        .mindspace-shell { min-height:100vh; height:100vh; overflow:hidden; background:var(--paper); color:var(--ink); font-family:'DM Sans',ui-sans-serif,system-ui,sans-serif; display:flex; }
+        .left-rail { width:68px; background:#f1f2ec; border-right:1px solid #e1e2db; display:flex; flex-direction:column; align-items:center; justify-content:space-between; padding:18px 0 16px; flex:none; z-index:20; }
+        .brand-mark { width:34px; height:34px; border-radius:11px; background:var(--ink); color:var(--lime); display:grid; place-items:center; font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; box-shadow:0 5px 12px #1e2a2214; }
+        .rail-stack { display:flex; flex-direction:column; align-items:center; gap:8px; }
+        .rail-divider { height:1px; width:24px; background:#d8d9d1; margin:8px 0; }
+        .rail-button { width:38px; height:38px; border:0; border-radius:11px; color:#969c93; background:transparent; display:grid; place-items:center; transition:all .18s var(--ease); }
+        .rail-button:hover { background:#e7e9df; color:var(--ink); transform:translateY(-1px); }
+        .rail-button.active { background:var(--ink); color:var(--lime); box-shadow:0 5px 12px #1e2a221a; }
+        .avatar { width:30px; height:30px; background:#e9d2c3; color:#654539; border:2px solid #fff; border-radius:50%; display:grid; place-items:center; font-size:10px; font-weight:700; }
+        .main-column { min-width:0; min-height:0; flex:1; display:flex; flex-direction:column; position:relative; }
+        .topbar { height:64px; flex:none; display:flex; align-items:center; justify-content:space-between; padding:0 22px 0 20px; border-bottom:1px solid #e4e5df; background:rgba(248,248,244,.9); backdrop-filter:blur(18px); z-index:12; }
+        .crumbs { display:flex; align-items:center; gap:11px; color:#848b82; font-size:13px; font-weight:600; }
+        .crumbs .current { color:var(--ink); }
+        .crumb-icon { width:26px; height:26px; border-radius:8px; background:var(--lime); display:grid; place-items:center; color:var(--ink); }
+        .top-actions { display:flex; align-items:center; gap:10px; }
+        .top-search { width:188px; height:34px; border:1px solid #e0e1d9; border-radius:9px; background:#fff; display:flex; align-items:center; gap:8px; padding:0 10px; color:#929990; }
+        .top-search input { width:100%; border:0; outline:0; background:transparent; font:500 12px 'DM Sans'; color:var(--ink); }
+        .top-search input::placeholder { color:#a1a69f; }
+        .top-button { height:34px; border:1px solid #dfe1d8; border-radius:9px; background:#fff; color:#626a61; display:flex; align-items:center; gap:7px; padding:0 11px; font:600 12px 'DM Sans'; transition:all .18s var(--ease); }
+        .top-button:hover { border-color:#c8cabf; color:var(--ink); transform:translateY(-1px); }
+        .share-button { background:var(--ink); color:#f7faec; border-color:var(--ink); }
+        .share-button:hover { background:#314238; color:#fff; }
+        .workspace { flex:1; min-height:0; display:flex; position:relative; }
+        .canvas-wrap { flex:1; min-width:0; position:relative; overflow:hidden; background-color:#f8f8f4; background-image:radial-gradient(#d9ddd1 1.1px, transparent 1.1px); background-size:25px 25px; }
+        .canvas-wrap:after { content:''; pointer-events:none; position:absolute; inset:0; background:linear-gradient(110deg, rgba(255,255,255,.42), transparent 40%, rgba(223,229,207,.15)); }
+        .canvas-board { position:absolute; inset:0; cursor:default; touch-action:none; z-index:1; }
+        .canvas-board.is-hand { cursor:grab; }
+        .canvas-board.is-hand:active { cursor:grabbing; }
+        .canvas-scene { position:absolute; left:0; top:0; width:1160px; height:850px; transform-origin:0 0; transition:transform .18s var(--ease); }
+        .group-zone { position:absolute; border:1px solid; border-radius:19px; padding:15px 17px; overflow:hidden; }
+        .group-zone:before { content:''; position:absolute; left:18px; right:18px; top:52px; border-top:1px solid currentColor; opacity:.16; }
+        .group-head { position:relative; display:flex; align-items:baseline; gap:11px; }
+        .group-title { font:700 11px 'Space Grotesk'; letter-spacing:.11em; }
+        .group-caption { color:#7d827b; font-size:11px; font-weight:500; }
+        .connections { position:absolute; inset:0; width:100%; height:100%; overflow:visible; pointer-events:none; z-index:2; }
+        .connection-path { fill:none; stroke:#a1a79d; stroke-width:1.5; stroke-dasharray:5 5; opacity:.72; }
+        .note-card { position:absolute; z-index:4; background:#fff; border:1px solid rgba(35,48,39,.1); border-radius:13px; box-shadow:0 9px 24px rgba(47,57,47,.08), 0 1px 2px rgba(47,57,47,.05); padding:15px 16px 13px; overflow:hidden; cursor:grab; user-select:none; transition:box-shadow .18s var(--ease), border-color .18s var(--ease), transform .18s var(--ease); }
+        .note-card:hover { box-shadow:0 13px 28px rgba(47,57,47,.13), 0 2px 3px rgba(47,57,47,.06); transform:translateY(-2px); }
+        .note-card:active { cursor:grabbing; }
+        .note-card.selected { border:2px solid var(--lime-deep); box-shadow:0 0 0 4px rgba(217,250,98,.25), 0 15px 30px rgba(47,57,47,.14); padding:14px 15px 12px; }
+        .note-card.link-start { border-color:#8c76d9; box-shadow:0 0 0 4px rgba(140,118,217,.18); }
+        .note-ribbon { width:max-content; padding:4px 7px; border-radius:5px; color:#586257; font-size:9px; line-height:1; font-weight:700; letter-spacing:.05em; text-transform:uppercase; margin-bottom:11px; }
+        .note-title { margin:0; font:600 15px/1.2 'Space Grotesk'; letter-spacing:-.02em; color:#273128; }
+        .note-preview { color:#748077; font-size:11px; line-height:1.55; margin:9px 0 0; display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden; }
+        .note-preview p { margin:0 0 7px; }
+        .note-preview strong { color:#4d5f48; font-weight:700; }
+        .note-footer { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:13px; padding-top:10px; border-top:1px solid #edf0e9; color:#a1a99f; font-size:9px; }
+        .mini-pill { display:flex; align-items:center; gap:4px; color:#7d867a; }
+        .mini-pill i { width:5px; height:5px; border-radius:50%; background:#c4cfc0; display:block; }
+        .canvas-hud { position:absolute; left:18px; bottom:18px; display:flex; align-items:center; gap:8px; z-index:8; }
+        .hud-group { display:flex; align-items:center; gap:2px; background:rgba(255,255,252,.9); backdrop-filter:blur(12px); border:1px solid #e0e2d9; border-radius:10px; box-shadow:0 6px 18px rgba(37,47,38,.08); padding:4px; }
+        .hud-button { width:30px; height:28px; border:0; border-radius:7px; background:transparent; color:#7c857a; display:grid; place-items:center; }
+        .hud-button:hover { background:#f0f2e8; color:var(--ink); }
+        .zoom-label { min-width:43px; text-align:center; color:#6c766b; font-size:11px; font-weight:700; }
+        .canvas-legend { position:absolute; right:18px; bottom:18px; z-index:8; display:flex; align-items:center; gap:13px; padding:10px 12px; border:1px solid #e3e4dc; border-radius:10px; background:rgba(255,255,252,.82); backdrop-filter:blur(12px); color:#8b9389; font-size:10px; }
+        .legend-item { display:flex; align-items:center; gap:6px; }
+        .legend-dot { width:8px; height:8px; border-radius:50%; }
+        .floating-hint { position:absolute; top:17px; left:50%; transform:translateX(-50%); padding:7px 12px; border-radius:999px; background:rgba(255,255,251,.84); border:1px solid #e6e7e0; color:#8a9287; font-size:10px; font-weight:600; z-index:8; box-shadow:0 4px 12px rgba(52,64,52,.05); }
+        .inspector { width:356px; flex:none; background:var(--panel); border-left:1px solid #dedfd8; display:flex; flex-direction:column; z-index:11; box-shadow:-9px 0 30px rgba(40,48,42,.045); }
+        .inspector-top { height:58px; display:flex; align-items:center; justify-content:space-between; padding:0 17px; border-bottom:1px solid #e7e8e1; }
+        .inspector-title { display:flex; align-items:center; gap:9px; font-size:12px; font-weight:700; color:#566055; }
+        .inspector-title .tiny-dot { width:7px; height:7px; border-radius:50%; background:var(--lime-deep); box-shadow:0 0 0 3px #eaf6bd; }
+        .inspector-actions { display:flex; gap:3px; }
+        .icon-button { border:0; background:transparent; color:#929a90; display:grid; place-items:center; border-radius:7px; width:29px; height:29px; transition:all .15s var(--ease); }
+        .icon-button:hover { background:#f0f1eb; color:var(--ink); }
+        .editor-scroll { flex:1; min-height:0; overflow:auto; padding:22px 25px 46px; }
+        .editor-scroll::-webkit-scrollbar { width:7px; }
+        .editor-scroll::-webkit-scrollbar-thumb { background:#dfe2d8; border-radius:10px; }
+        .editor-meta { display:flex; align-items:center; justify-content:space-between; color:#a1a79e; font-size:10px; margin-bottom:17px; }
+        .editor-meta .meta-left { display:flex; align-items:center; gap:6px; }
+        .editor-meta .meta-dot { width:5px; height:5px; border-radius:50%; background:#b7d928; }
+        .note-tag { width:max-content; padding:5px 8px; border-radius:6px; color:#5f6b5b; font-size:9px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; margin-bottom:14px; }
+        .editor-title { width:100%; resize:none; border:0; outline:0; background:transparent; color:#243127; font:700 28px/1.12 'Space Grotesk'; letter-spacing:-.05em; margin-bottom:18px; }
+        .editor-title::placeholder { color:#c0c6bc; }
+        .editor-toolbar { position:sticky; top:-22px; z-index:3; margin:0 -25px 19px; padding:10px 21px; background:rgba(251,251,248,.92); backdrop-filter:blur(12px); border-top:1px solid #eef0e8; border-bottom:1px solid #e9ebe3; display:flex; align-items:center; gap:2px; }
+        .editor-toolbar:before { content:''; position:absolute; top:-1px; left:0; right:0; border-top:1px solid rgba(255,255,255,.9); }
+        .toolbar-button { width:28px; height:27px; border:0; border-radius:6px; background:transparent; color:#798378; display:grid; place-items:center; }
+        .toolbar-button:hover, .toolbar-button.active { background:#edf0e6; color:var(--ink); }
+        .toolbar-separator { width:1px; height:18px; background:#e0e3da; margin:0 5px; }
+        .editor-body { min-height:360px; outline:0; color:#606d62; font-size:14px; line-height:1.72; }
+        .editor-body:focus { color:#536255; }
+        .editor-body p { margin:0 0 14px; }
+        .editor-body strong { color:#3d5945; font-weight:700; }
+        .editor-body em { color:#647464; }
+        .editor-body ul, .editor-body ol { margin:2px 0 15px; padding-left:20px; }
+        .editor-body li { margin:6px 0; padding-left:4px; }
+        .editor-body blockquote { border-left:3px solid var(--lime-deep); margin:19px 0; padding:4px 0 4px 14px; color:#738174; font-style:italic; }
+        .editor-body mark { background:#eff6c8; color:#5e702f; padding:1px 3px; border-radius:3px; }
+        .editor-divider { height:1px; background:#e9ebe4; margin:25px 0 19px; }
+        .backlinks-title { display:flex; align-items:center; justify-content:space-between; color:#8d968b; font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; margin-bottom:12px; }
+        .backlink { display:flex; align-items:center; gap:9px; border:1px solid #eceee7; border-radius:9px; padding:10px; color:#6e786f; font-size:11px; background:#fff; margin-bottom:7px; }
+        .backlink-icon { width:21px; height:21px; background:#f0f2e8; border-radius:6px; display:grid; place-items:center; color:#8b9586; }
+        .inspector-footer { min-height:46px; border-top:1px solid #e8e9e2; display:flex; align-items:center; justify-content:space-between; padding:0 18px; color:#a0a69e; font-size:10px; }
+        .inspector-reopen { position:absolute; right:17px; top:18px; z-index:14; width:36px; height:36px; border:1px solid #dfe1d8; border-radius:10px; background:rgba(255,255,252,.92); color:#667064; display:grid; place-items:center; box-shadow:0 7px 16px rgba(37,47,38,.1); }
+        .inspector-reopen:hover { background:#fff; color:var(--ink); transform:translateY(-1px); }
+        .save-status { display:flex; align-items:center; gap:6px; }
+        .save-status svg { color:#9bb729; }
+        .inspector-footer button { border:0; background:transparent; color:#a0a69e; }
+        .inspector-footer button:hover { color:#bc5a4c; }
+        .toast { position:absolute; bottom:72px; left:50%; transform:translateX(-50%); z-index:20; display:flex; align-items:center; gap:8px; background:#263229; color:#f6f9ef; border-radius:99px; padding:10px 14px; box-shadow:0 10px 20px rgba(24,32,25,.2); font-size:11px; font-weight:600; animation:toast-in .24s var(--ease); }
+        @keyframes toast-in { from { opacity:0; transform:translate(-50%,8px); } to { opacity:1; transform:translate(-50%,0); } }
+        @media (max-width: 980px) { .inspector { width:320px; } .top-search { width:140px; } .canvas-legend { display:none; } }
+        @media (max-width: 760px) { .left-rail { width:55px; } .inspector { position:absolute; right:0; top:0; bottom:0; width:min(356px, 88vw); } .topbar { padding-left:14px; } .crumbs span:not(.current) { display:none; } .top-search { display:none; } }
+      `}</style>
+
+      <aside className="left-rail">
+        <div className="rail-stack">
+          <div className="brand-mark" title="Mindspace">M</div>
+          <div className="rail-divider" />
+          <button className={`${iconButton} rail-button active`} title="Canvas"><LayoutGrid size={17} strokeWidth={1.8} /></button>
+          <button className={`${iconButton} rail-button`} title="Notes" onClick={() => { setActiveTool("note"); notify("Click anywhere on the canvas to add a note"); }}><FileText size={17} strokeWidth={1.8} /></button>
+          <button className={`${iconButton} rail-button`} title="Library" onClick={() => notify("Library view is ready for your next collection")}><Archive size={17} strokeWidth={1.8} /></button>
+          <button className={`${iconButton} rail-button`} title="People" onClick={() => notify("Sharing is available from the top bar")}><Users size={17} strokeWidth={1.8} /></button>
         </div>
-        <div className="canvas-status"><span><span className="state-dot" /> Autosaved</span><span>Drag to pan · Scroll to zoom · Double click to add</span></div>
-      </main>
-      <aside className="inspector flex flex-col h-full">
-        <div className="inspector-tabs"><button className={activePanel === "inspector" ? "active" : ""} onClick={() => setActivePanel("inspector")}>Inspector</button><button className={activePanel === "sources" ? "active" : ""} onClick={() => setActivePanel("sources")}>Sources <span>{activeSources.length}</span></button><button className={activePanel === "ai" ? "active" : ""} onClick={() => setActivePanel("ai")}>AI</button></div>
-        {activePanel === "sources" ? <div className="source-panel"><div className="panel-heading"><div><p className="eyebrow">Library</p><h2>Research sources</h2></div><button className="round-button" onClick={handleUploadClick}><Upload size={15} /></button></div><div className="source-search"><Search size={15} /><input placeholder="Filter sources" /></div>{activeSources.map((source: any) => <button className="source-item" key={source.id} onClick={() => { const linked = cards.find((card: CanvasCard) => card.sourceId === source.id); if (linked) setSelectedId(linked.id); setActivePanel("inspector"); }}><div className="source-icon" style={{ background: source.color ?? "#e5def8" }}><FileText size={16} /></div><div><strong>{source.title}</strong><span>{source.sourceType || source.type} {source.meta ? `· ${source.meta}` : ''}</span></div><ArrowRight size={15} /></button>)}<button className="add-source" onClick={handleUploadClick}><Plus size={15} /> Add a source</button></div> 
-        : activePanel === "ai" ? 
-        <div className="ai-panel flex-1 flex flex-col p-4 bg-white/50 backdrop-blur-md">
-          <div className="flex-1 overflow-y-auto space-y-4 mb-4 pr-2">
-            {messages.map((msg, i) => (
-              <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                <div className={`px-4 py-3 rounded-2xl max-w-[90%] text-sm ${msg.role === "user" ? "bg-gray-900 text-white rounded-br-none" : "bg-gray-100 text-gray-800 rounded-bl-none"}`}>
-                  {msg.content}
-                </div>
-              </div>
-            ))}
-            <div ref={messagesEndRef} />
-          </div>
-          <div className="flex gap-2">
-            <input type="text" value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && askAi()} placeholder="Ask about your canvas..." className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all" />
-            <button onClick={askAi} disabled={!input.trim()} className="w-10 h-10 rounded-xl bg-gray-900 text-white flex items-center justify-center hover:bg-black transition-colors disabled:opacity-50"><ChevronRight size={18} /></button>
-          </div>
+        <div className="rail-stack">
+          <button className={`${iconButton} rail-button`} title="Help" onClick={() => notify("Tip: use H to pan and N to add a note")}><CircleHelp size={17} strokeWidth={1.8} /></button>
+          <div className="avatar" title="Aarav Mehta">AM</div>
         </div>
-        : <div className="inspector-content">{selected && <><div className={`inspector-banner banner-${selected.accent}`}><span>{selected.cardType}</span><button><MoreHorizontal size={17} /></button></div><div className="inspector-heading"><input className="editable-title bg-transparent border-none outline-none w-full font-bold text-lg" value={selected.title} onChange={(e) => { setCards(cards.map(c => c.id === selected.id ? { ...c, title: e.target.value } : c)); if (canvasId) updateCard.mutate({ cardId: selected.id, title: e.target.value }); }} /><button className="round-button"><WandSparkles size={15} /></button></div><div className="inspector-meta"><span><span className="state-dot" /> Card saved</span><span>Just now</span></div><div className="inspector-block"><label>Thought</label><div className="inspector-body"><textarea className="w-full bg-transparent border-none outline-none resize-none min-h-[120px] text-sm" value={selected.body} onChange={(e) => { setCards(cards.map(c => c.id === selected.id ? { ...c, body: e.target.value } : c)); if (canvasId) updateCard.mutate({ cardId: selected.id, body: e.target.value }); }} placeholder="Enter thought here..." /></div></div>{selectedSource && <div className="linked-source"><div className="linked-source-top"><BookOpen size={15} /><span>Linked source</span><ArrowRight size={14} /></div><strong>{selectedSource.title}</strong><p>“{selectedSource.excerpt}”</p><div className="citation-row"><span>Passage 04</span><span>Open reading view</span></div></div>}<div className="ai-suggestion"><Sparkles size={15} /><div><strong>Context Assembly</strong><p>Ask the backend intelligence to assemble context for this card.</p></div><button onClick={() => { toast("Assembling context via backend..."); aiMutation.mutate({ mode: "context_assembly" as any, prompt: selected.title, context: selected.body }, { onSuccess: (res) => { const next: CanvasCard = { id: Date.now(), title: "AI Response", body: res.content, cardType: "insight", accent: "sky", x: selected.x + selected.width + 40, y: selected.y, width: 270, height: 170 }; setCards(c => [...c, next]); setLinks(l => [...l, { id: Date.now(), fromCardId: selected.id, toCardId: next.id }]); setSelectedId(next.id); if (canvasId) createCard.mutate({ canvasId, title: next.title, body: next.body, cardType: next.cardType, accent: next.accent, x: next.x, y: next.y }); } }) }}>{aiMutation.isPending ? "Asking..." : "Ask"}</button></div><div className="inspector-footer"><button><Link2 size={15} /> Add connection</button><button onClick={() => { setCards(cards.filter(c => c.id !== selected.id)); if (canvasId) deleteCard.mutate({ cardId: selected.id }); }} className="text-destructive hover:bg-destructive/10"><X size={15} /> Delete</button></div></>}</div>}
       </aside>
-      </div>
+
+      <main className="main-column">
+        <header className="topbar">
+          <div className="crumbs">
+            <div className="crumb-icon"><BookOpen size={14} strokeWidth={2.1} /></div>
+            <span>Workspaces</span><ChevronDown size={13} />
+            <span>Personal OS</span><span>/</span><span className="current">Thinking in public</span>
+          </div>
+          <div className="top-actions">
+            <label className="top-search"><Search size={14} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search this space" /><kbd>⌘ K</kbd></label>
+            <button className="top-button" onClick={() => notify("Invite link copied to clipboard")}><Share2 size={14} /> Share</button>
+            <button className="icon-button" title="More workspace actions" onClick={() => notify("Workspace menu opened")}><MoreHorizontal size={18} /></button>
+          </div>
+        </header>
+
+        <div className="workspace">
+          <section className={`canvas-wrap ${activeTool === "hand" ? "is-hand" : ""}`}>
+            <div className={`canvas-board ${activeTool === "hand" ? "is-hand" : ""}`} ref={boardRef} onPointerDown={handleBoardPointerDown} onPointerMove={handleBoardPointerMove} onPointerUp={stopPointerWork} onPointerCancel={stopPointerWork} onWheel={(event) => { if (event.metaKey || event.ctrlKey) { event.preventDefault(); zoomBy(event.deltaY > 0 ? -.04 : .04); } }}>
+              <div className="floating-hint">{activeTool === "connect" ? (linkStart ? "Select a second note" : "Select two notes to connect") : "Drag notes to make the thinking visible"}</div>
+              <div className="canvas-scene" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}>
+                {groups.map((group) => (
+                  <div key={group.id} className="group-zone" style={{ left: group.x, top: group.y, width: group.width, height: group.height, background: group.color, borderColor: group.border, color: group.border }}>
+                    <div className="group-head"><span className="group-title" style={{ color: "#516052" }}>{group.title}</span><span className="group-caption">{group.caption}</span></div>
+                  </div>
+                ))}
+                <svg className="connections" viewBox="0 0 1160 850" preserveAspectRatio="none">
+                  <defs><marker id="arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7" fill="none" stroke="#a1a79d" strokeWidth="1.2" /></marker></defs>
+                  {connections.map((connection, index) => {
+                    const from = notePosition(connection.from);
+                    const to = notePosition(connection.to);
+                    const startX = from.x + from.width;
+                    const startY = from.y + from.height / 2;
+                    const endX = to.x;
+                    const endY = to.y + to.height / 2;
+                    const bend = Math.max(42, Math.abs(endX - startX) * .42);
+                    return <path key={`${connection.from}-${connection.to}-${index}`} className="connection-path" markerEnd="url(#arrow)" d={`M ${startX} ${startY} C ${startX + bend} ${startY}, ${endX - bend} ${endY}, ${endX} ${endY}`} />;
+                  })}
+                </svg>
+                {visibleNotes.map((note) => (
+                  <div key={note.id} className={`note-card ${selectedId === note.id ? "selected" : ""} ${linkStart === note.id ? "link-start" : ""}`} style={{ left: note.x, top: note.y, width: note.width, minHeight: note.height }} onPointerDown={(event) => handleCardPointerDown(event, note)} onClick={() => handleCardClick(note)}>
+                    <div className="note-ribbon" style={{ background: note.tagColor }}>{note.tag}</div>
+                    <h3 className="note-title">{note.title}</h3>
+                    <div className="note-preview" dangerouslySetInnerHTML={{ __html: note.body }} />
+                    <div className="note-footer"><span className="mini-pill"><i /> {note.pinned ? "Pinned" : "Note"}</span><span>{note.updated.replace("Edited ", "")}</span></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="canvas-hud">
+              <div className="hud-group">
+                <button className={`hud-button ${activeTool === "select" ? "active" : ""}`} title="Select (V)" onClick={() => setActiveTool("select")}><Move size={15} /></button>
+                <button className={`hud-button ${activeTool === "hand" ? "active" : ""}`} title="Pan canvas (H)" onClick={() => setActiveTool("hand")}><Hand size={15} /></button>
+                <button className={`hud-button ${activeTool === "note" ? "active" : ""}`} title="Add note (N)" onClick={() => { setActiveTool("note"); notify("Click anywhere on the canvas to add a note"); }}><StickyNote size={15} /></button>
+                <button className={`hud-button ${activeTool === "connect" ? "active" : ""}`} title="Connect notes" onClick={() => { setActiveTool("connect"); setLinkStart(null); notify("Select two notes to connect"); }}><Link2 size={15} /></button>
+              </div>
+              <div className="hud-group">
+                <button className="hud-button" title="Zoom out" onClick={() => zoomBy(-.08)}><ZoomOut size={15} /></button>
+                <span className="zoom-label">{Math.round(zoom * 100)}%</span>
+                <button className="hud-button" title="Zoom in" onClick={() => zoomBy(.08)}><ZoomIn size={15} /></button>
+                <button className="hud-button" title="Fit canvas" onClick={() => { setZoom(.78); setPan({ x: 30, y: 28 }); }}><Maximize2 size={14} /></button>
+              </div>
+            </div>
+            <div className="canvas-legend"><span className="legend-item"><i className="legend-dot" style={{ background: "#d9fa62" }} /> Selected</span><span className="legend-item"><i className="legend-dot" style={{ background: "#d6eadd" }} /> Linked</span><span className="legend-item"><Lock size={11} /> Private space</span></div>
+            {showToast && <div className="toast"><Check size={14} color="#d9fa62" /> {toast}</div>}
+          </section>
+
+          {showInspector && <aside className="inspector">
+            <div className="inspector-top"><div className="inspector-title"><span className="tiny-dot" /> Note editor</div><div className="inspector-actions"><button className={iconButton} title="Duplicate note" onClick={() => { addNote(selected.x + 28, selected.y + 28); notify("Note duplicated"); }}><Copy size={15} /></button><button className={iconButton} title="Close inspector" onClick={() => setShowInspector(false)}><X size={16} /></button></div></div>
+            <div className="editor-scroll">
+              <div className="editor-meta"><span className="meta-left"><Cloud size={12} /> {saveState}</span><span>{selected.updated}</span></div>
+              <div className="note-tag" style={{ background: selected.tagColor }}>{selected.tag}</div>
+              <textarea className="editor-title" value={selected.title} onChange={(event) => updateNote(selected.id, { title: event.target.value })} rows={2} aria-label="Note title" />
+              <div className="editor-toolbar">
+                <button className="toolbar-button" title="Bold" onMouseDown={(event) => event.preventDefault()} onClick={() => format("bold")}><Bold size={14} /></button>
+                <button className="toolbar-button" title="Italic" onMouseDown={(event) => event.preventDefault()} onClick={() => format("italic")}><Italic size={14} /></button>
+                <button className="toolbar-button" title="Underline" onMouseDown={(event) => event.preventDefault()} onClick={() => format("underline")}><Underline size={14} /></button>
+                <button className="toolbar-button" title="Highlight" onMouseDown={(event) => event.preventDefault()} onClick={() => format("hiliteColor", "#eff6c8")}><Highlighter size={14} /></button>
+                <div className="toolbar-separator" />
+                <button className="toolbar-button" title="Bulleted list" onMouseDown={(event) => event.preventDefault()} onClick={() => format("insertUnorderedList")}><List size={15} /></button>
+                <button className="toolbar-button" title="Strikethrough" onMouseDown={(event) => event.preventDefault()} onClick={() => format("strikeThrough")}><Strikethrough size={14} /></button>
+                <div className="toolbar-separator" />
+                <button className="toolbar-button" title="Undo" onClick={() => format("undo")}><Undo2 size={14} /></button>
+                <button className="toolbar-button" title="Redo" onClick={() => format("redo")}><Redo2 size={14} /></button>
+                <button className="toolbar-button" title="More formatting" onClick={() => notify("More formatting options coming next")}><MoreHorizontal size={15} /></button>
+              </div>
+                <EditorContent note={selected} onUpdate={(id, body) => updateNote(id, { body })} />
+              <div className="editor-divider" />
+              <div className="backlinks-title"><span>Connected ideas</span><span>{connections.filter((connection) => connection.from === selected.id || connection.to === selected.id).length}</span></div>
+              {connections.filter((connection) => connection.from === selected.id || connection.to === selected.id).slice(0, 3).map((connection) => {
+                const otherId = connection.from === selected.id ? connection.to : connection.from;
+                const other = notes.find((note) => note.id === otherId);
+                return other ? <button key={otherId} className="backlink" onClick={() => setSelectedId(other.id)}><span className="backlink-icon"><Link2 size={12} /></span><span>{other.title}</span><ArrowUpRight size={13} style={{ marginLeft: "auto" }} /></button> : null;
+              })}
+              <button className="backlink" onClick={() => { setActiveTool("connect"); notify("Select a note to connect"); }}><span className="backlink-icon"><Plus size={13} /></span><span>Add a connected idea</span></button>
+            </div>
+            <div className="inspector-footer"><span className="save-status"><Check size={13} /> All changes saved</span><button title="Delete note" onClick={removeSelected}><Trash2 size={14} /></button></div>
+          </aside>}
+
+          {!showInspector && <button className="inspector-reopen" title="Open note editor" onClick={() => setShowInspector(true)}><PanelRight size={16} /></button>}
+        </div>
+      </main>
     </div>
-    {searchOpen && <div className="overlay-layer" onMouseDown={() => setSearchOpen(false)}><div className="search-dialog" onMouseDown={(e: React.MouseEvent) => e.stopPropagation()}><div className="dialog-input"><Search size={19} /><Input autoFocus value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)} placeholder="Search cards and sources…" /><kbd>esc</kbd></div><div className="search-results">{search.length > 1 ? <>{filteredCards.map((card: CanvasCard) => <button key={card.id} onClick={() => { setSelectedId(card.id); setSearchOpen(false); }}><StickyNote size={15} /><span><strong>{card.title}</strong><em>{card.cardType} · Learning Garden</em></span><ArrowRight size={15} /></button>)}{searchQuery.data?.sources?.map((source: any) => <button key={source.id}><BookOpen size={15} /><span><strong>{source.title}</strong><em>Source · {source.sourceType}</em></span><ArrowRight size={15} /></button>)}</> : <div className="empty-search"><Search size={22} /><p>Type to search across your garden</p><span>Cards, sources, notes, and boards</span></div>}</div></div></div>}
-    {commandOpen && <div className="overlay-layer" onMouseDown={() => setCommandOpen(false)}><div className="command-dialog" onMouseDown={(e: React.MouseEvent) => e.stopPropagation()}><div className="command-heading"><div className="command-symbol"><Command size={17} /></div><div><strong>Command garden</strong><span>Quick actions for your workspace</span></div><button onClick={() => setCommandOpen(false)}><X size={16} /></button></div><div className="command-list"><button onClick={addCard}><StickyNote size={17} /><span><strong>New card</strong><em>Capture a thought on the canvas</em></span><kbd>n</kbd></button><button onClick={() => { setActivePanel("sources"); setCommandOpen(false); }}><BookOpen size={17} /><span><strong>Open source library</strong><em>Browse reading material and excerpts</em></span><kbd>s</kbd></button><button onClick={() => { setSearchOpen(true); setCommandOpen(false); }}><Search size={17} /><span><strong>Search this garden</strong><em>Find cards, sources, and notes</em></span><kbd>/</kbd></button></div></div></div>}
-  </div>;
+  );
 }
+const _unused = [ArrowDownToLine, Command, Menu, MessageCircle, Send, SlidersHorizontal, SquarePen];
+void _unused;
+const _unused2 = [Share2, Sparkles];
+void _unused2;

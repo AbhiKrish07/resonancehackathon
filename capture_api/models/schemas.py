@@ -5,7 +5,7 @@ from datetime import datetime
 from enum import Enum
 
 
-class CaptureType(str, Enum):
+class MemoryType(str, Enum):
     TEXT = "text"
     IMAGE = "image"
     SCREENSHOT = "screenshot"
@@ -90,11 +90,11 @@ class Space(BaseModel):
 
 
 # -------------------------------------------------------------
-# CAPTURES
+# MEMORIES
 # -------------------------------------------------------------
-class CaptureCreate(BaseModel):
+class MemoryCreate(BaseModel):
     original_content: str
-    capture_type: CaptureType = CaptureType.TEXT
+    memory_type: MemoryType = MemoryType.TEXT
     title: Optional[str] = None
     source_type: Optional[str] = "manual"
     file_url: Optional[str] = None
@@ -103,12 +103,12 @@ class CaptureCreate(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
 
-class Capture(BaseModel):
+class Memory(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     user_id: UUID
     original_content: str
     normalized_content: Optional[str] = None
-    capture_type: CaptureType
+    memory_type: MemoryType
     title: Optional[str] = None
     source_type: Optional[str] = "manual"
     file_url: Optional[str] = None

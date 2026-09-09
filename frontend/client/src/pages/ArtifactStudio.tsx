@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sparkles, FileText, Brain, BookOpen, Layers, Clock, GraduationCap, Loader2, ChevronRight, RotateCcw } from 'lucide-react';
+import { useSearch } from 'wouter';
 import { Button } from '../components/ui/button';
 
 type ArtifactType = 'mindmap' | 'summary' | 'flashcards' | 'key_concepts' | 'timeline' | 'study_guide';
@@ -165,6 +166,31 @@ export default function ArtifactStudio() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [artifact, setArtifact] = useState<StudyArtifact | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const searchString = useSearch();
+  const searchParams = new URLSearchParams(searchString);
+  const captureId = searchParams.get("captureId");
+  const initialType = searchParams.get("type") as ArtifactType | null;
+
+  useEffect(() => {
+    if (initialType) {
+      setSelectedType(initialType);
+    }
+  }, [initialType]);
+
+  useEffect(() => {
+    if (captureId) {
+      fetch(`${CAPTURE_API_URL}/captures/${captureId}`, {
+        headers: { "Authorization": "Bearer demo-user" }
+      })
+      .then(res => res.json())
+      .then(data => {
+        setSourceTitle(data.title || "");
+        setSourceText(data.normalized_content || data.original_content || "");
+      })
+      .catch(err => console.error("Failed to load capture for artifact", err));
+    }
+  }, [captureId]);
 
   const handleGenerate = async () => {
     if (!sourceText.trim() || !sourceTitle.trim() || !selectedType) return;

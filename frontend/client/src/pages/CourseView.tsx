@@ -5,22 +5,34 @@ import { BookOpen, PlayCircle, Trophy, Brain, ChevronRight, Sparkles, Target, Cl
 import { Button } from '../components/ui/button';
 import { StudyQuestDashboard } from '../components/courses/StudyQuestDashboard';
 import { useDarwinity } from '@/contexts/DarwinityStoreContext';
+import { useCompanion } from '@/contexts/CompanionContext';
+import { initialCourses } from '@/lib/persistence';
+import { generate10LevelCourse } from '@/lib/courseGenerator';
 
 export function CourseView() {
   const [, params] = useRoute('/courses/:courseId');
   const [, setLocation] = useLocation();
-  const { state: darwinityState } = useDarwinity();
+  const { state: darwinityState, dispatch } = useDarwinity();
+  const companion = useCompanion();
   
   const courseIdParam = params?.courseId;
   const courseIdNum = Number(courseIdParam);
-  const isTrpc = !isNaN(courseIdNum);
+  const isTrpc = !isNaN(courseIdNum) && courseIdParam ? !courseIdParam.includes('-') : false;
 
   const { data: trpcCourse, isLoading, error, isError } = trpc.curriculum.get.useQuery(
     { courseId: courseIdNum }, 
     { enabled: isTrpc }
   );
 
-  const darwinityCourse = darwinityState.courses.find(c => c.id === courseIdParam);
+  let darwinityCourse = darwinityState.courses.find(c => String(c.id) === String(courseIdParam))
+    || initialCourses.find(c => String(c.id) === String(courseIdParam));
+
+  if (!darwinityCourse && courseIdParam) {
+    const titleFromId = courseIdParam.replace(/^(course|mod|les)-/i, '').replace(/[-_]/g, ' ');
+    darwinityCourse = generate10LevelCourse(titleFromId, "intermediate");
+    dispatch({ type: "CREATE_COURSE", course: darwinityCourse });
+  }
+
   if (darwinityCourse && !(darwinityCourse as any).mastery) {
     (darwinityCourse as any).mastery = {
       completedLessonIds: [],
@@ -29,7 +41,7 @@ export function CourseView() {
     };
   }
 
-  const course = isTrpc ? trpcCourse : darwinityCourse;
+  const course = isTrpc ? (trpcCourse || darwinityCourse) : darwinityCourse;
 
   if (isTrpc && isLoading) {
     return (
@@ -56,8 +68,16 @@ export function CourseView() {
     );
   }
 
+  if (course && course.modules && course.lessons && !course.modules[0]?.lessons) {
+    course.modules.forEach((mod: any) => {
+      if (mod.lessonIds) {
+        mod.lessons = mod.lessonIds.map((id: string) => course.lessons.find((l: any) => l.id === id)).filter(Boolean);
+      }
+    });
+  }
+
   // Flatten lessons from modules to build the path
-  const allLessons = (course.modules || []).flatMap((m: any) => m.lessons || []);
+  const allLessons = course?.lessons || (course?.modules || []).flatMap((m: any) => m.lessons || []);
   const totalLessons = allLessons.length;
   const completedLessonIds = course.mastery?.completedLessonIds ?? [];
   const completedLessons = course.mastery?.completedLessons ?? completedLessonIds.length;
@@ -172,7 +192,7 @@ export function CourseView() {
           <h2 className="text-xl font-bold text-gray-800">Quick Actions</h2>
           
           <div className="space-y-3">
-            <button className="w-full flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-2xl hover:border-[#123d2d] hover:shadow-md transition-all text-left">
+            <button onClick={() => setLocation(`/learn?courseId=${course.id}`)} className="w-full flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-2xl hover:border-[#123d2d] hover:shadow-md transition-all text-left">
               <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center">
                 <Brain size={20} className="text-purple-500" />
               </div>
@@ -182,7 +202,7 @@ export function CourseView() {
               </div>
             </button>
             
-            <button className="w-full flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-2xl hover:border-[#123d2d] hover:shadow-md transition-all text-left">
+            <button onClick={() => companion.open()} className="w-full flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-2xl hover:border-[#123d2d] hover:shadow-md transition-all text-left">
               <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
                 <Sparkles size={20} className="text-blue-500" />
               </div>
@@ -192,7 +212,7 @@ export function CourseView() {
               </div>
             </button>
             
-            <button className="w-full flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-2xl hover:border-[#123d2d] hover:shadow-md transition-all text-left">
+            <button onClick={() => setLocation(course.sourceIds?.length ? `/spaces/${course.sourceIds[0]}` : '/artifacts')} className="w-full flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-2xl hover:border-[#123d2d] hover:shadow-md transition-all text-left">
               <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
                 <BookOpen size={20} className="text-amber-500" />
               </div>

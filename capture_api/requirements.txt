@@ -17,3 +17,4 @@ pydub
 elevenlabs
 llama_index
 docling
+google-generativeai

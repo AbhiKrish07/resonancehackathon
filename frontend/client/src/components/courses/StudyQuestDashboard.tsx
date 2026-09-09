@@ -1,8 +1,11 @@
 import React from 'react';
-import { Clock3, Layers, LayoutGrid, Target, Clock, Coins, PlayCircle, Trophy } from 'lucide-react';
+import { useLocation } from 'wouter';
+import { Clock3, Layers, LayoutGrid, Target, Clock, Coins, PlayCircle, Trophy, Sparkles } from 'lucide-react';
 
 export function StudyQuestDashboard({ course }: { course: any }) {
-  const score = course.mastery?.progress ? (course.mastery.progress / 10).toFixed(1) : "0.0";
+  const [, setLocation] = useLocation();
+  const score = course.mastery?.score || 0;
+
   const progressPercent = course.mastery?.progress || 0;
   
   return (
@@ -51,10 +54,22 @@ export function StudyQuestDashboard({ course }: { course: any }) {
 
             {/* Action Buttons */}
             <div className="flex flex-wrap items-center gap-3">
-              <button className="px-6 py-3 bg-primary hover:opacity-90 text-primary-foreground rounded-xl font-bold flex items-center gap-2 transition-opacity">
+              <button 
+                onClick={() => {
+                  const firstMod = course.modules?.[0];
+                  const firstLessonId = firstMod?.lessonIds?.[0] || course.lessons?.[0]?.id;
+                  if (firstLessonId) {
+                    setLocation(`/courses/${course.id}/learn/${firstLessonId}`);
+                  }
+                }}
+                className="px-6 py-3 bg-primary hover:opacity-90 text-primary-foreground rounded-xl font-bold flex items-center gap-2 transition-opacity"
+              >
                 <Clock3 size={18} /> Go study
               </button>
-              <button className="px-6 py-3 bg-card border border-border rounded-xl font-bold flex items-center gap-2 hover:bg-muted transition-colors">
+              <button 
+                onClick={() => alert("Rewards program coming soon! Keep studying to earn points.")}
+                className="px-6 py-3 bg-card border border-border rounded-xl font-bold flex items-center gap-2 hover:bg-muted transition-colors"
+              >
                 <Coins size={18} /> Rewards
               </button>
             </div>
@@ -83,9 +98,9 @@ export function StudyQuestDashboard({ course }: { course: any }) {
           </div>
           <div className="bg-muted rounded-2xl p-5 flex flex-col justify-center">
             <div className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground mb-1">
-              <Trophy size={14} /> Quiz
+              <Sparkles size={14} /> Total XP
             </div>
-            <span className="text-xl font-extrabold">0</span>
+            <span className="text-xl font-extrabold">{course.mastery?.xp || 0}</span>
           </div>
         </div>
         

@@ -1,8 +1,9 @@
-import { Search, FileText, CheckCircle2, Clock, AlertCircle, Sparkles, Brain, Eye, Loader2 } from "lucide-react";
+import { Search, FileText, CheckCircle2, Clock, AlertCircle, Sparkles, Brain, Eye, Loader2, Plus, Upload, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useCompanion } from "@/contexts/CompanionContext";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useLocation } from "wouter";
+import { Button } from "@/components/ui/button";
 
 type SourceStatus = "ready" | "extracting" | "synthesizing" | "failed";
 
@@ -15,17 +16,83 @@ export default function Library() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [expandedSource, setExpandedSource] = useState<number | null>(null);
-
-  const bootstrap = trpc.workspace.bootstrap.useQuery();
-  const { data: sourcesData } = trpc.workspace.sources.useQuery(
-    { workspaceId: bootstrap.data?.id as number },
-    { enabled: !!bootstrap.data?.id }
-  );
+  const [expandedSource, setExpandedSource] = useState<string | null>(null);
+  
+  const [captures, setCaptures] = useState<any[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [previewCapture, setPreviewCapture] = useState<any | null>(null);
+  const uploadRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setContext({ workspace: "Library" });
+    
+    // Fetch captures from Python backend
+    fetch(`${CAPTURE_API_URL}/captures`, { headers: { "Authorization": "Bearer demo-user" } })
+      .then(res => res.json())
+      .then(data => setCaptures(Array.isArray(data) ? data : []))
+      .catch(err => console.error("Failed to load captures", err));
   }, [setContext]);
+
+  const handleAddSource = () => uploadRef.current?.click();
+
+  const createSourceMutation = trpc.workspace.createSource.useMutation();
+
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    let uploadedSuccessfully = false;
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("title", file.name);
+      const res = await fetch(`${CAPTURE_API_URL}/captures/upload`, {
+        method: "POST",
+        headers: { "Authorization": "Bearer demo-user" },
+        body: formData
+      });
+      if (res.ok) {
+        const newCap = await res.json();
+        setCaptures(prev => [newCap, ...prev]);
+        uploadedSuccessfully = true;
+      }
+    } catch (err) {
+      console.warn("Python backend upload failed, attempting fallback:", err);
+    }
+
+    if (!uploadedSuccessfully) {
+      try {
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          const base64 = (event.target?.result as string).split(',')[1];
+          const newSource = {
+            id: Date.now().toString(),
+            title: file.name,
+            capture_type: file.type.includes("pdf") ? "pdf" : file.type.includes("image") ? "image" : "document",
+            processing_status: "ready",
+            original_content: `Content extracted from ${file.name}`,
+            created_at: new Date().toISOString()
+          };
+          setCaptures(prev => [newSource, ...prev]);
+          createSourceMutation.mutate({
+            workspaceId: 1,
+            title: file.name,
+            fileName: file.name,
+            mimeType: file.type,
+            fileBase64: base64,
+            sourceType: file.type.includes("pdf") ? "pdf" : file.type.includes("image") ? "image" : "document"
+          });
+        };
+        reader.readAsDataURL(file);
+        uploadedSuccessfully = true;
+      } catch (e) {
+        alert("Upload failed.");
+      }
+    }
+
+    setUploading(false);
+    if (uploadRef.current) uploadRef.current.value = "";
+  };
 
   // Semantic search via backend
   useEffect(() => {
@@ -74,9 +141,9 @@ export default function Library() {
     }
   };
 
-  const filteredSources = (sourcesData || []).filter((s: any) => {
-    if (activeFilter !== "All" && s.sourceType?.toLowerCase() !== activeFilter.toLowerCase()) return false;
-    if (searchQuery && !s.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+  const filteredSources = captures.filter((s: any) => {
+    if (activeFilter !== "All" && s.capture_type?.toLowerCase() !== activeFilter.toLowerCase()) return false;
+    if (searchQuery && !s.title?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
   });
 
@@ -99,7 +166,13 @@ export default function Library() {
           </div>
         </div>
         
-
+        <div className="flex items-center gap-3 shrink-0">
+          <input ref={uploadRef} type="file" className="hidden" accept=".pdf,.txt,.doc,.docx,.png,.jpg,.mp3,.m4a" onChange={handleFileSelected} />
+          <Button onClick={handleAddSource} disabled={uploading} className="bg-[#123d2d] hover:bg-[#0d2a1f] text-white font-bold rounded-xl px-6 py-4 h-auto">
+            {uploading ? <Loader2 size={20} className="mr-2 animate-spin" /> : <Upload size={20} className="mr-2" />}
+            {uploading ? "Uploading..." : "Upload Document"}
+          </Button>
+        </div>
       </div>
 
       {/* AI Search Results */}
@@ -140,62 +213,88 @@ export default function Library() {
           <div key={source.id}>
             <div 
               className="p-5 rounded-2xl bg-white border border-gray-200 shadow-sm flex items-center justify-between hover:border-gray-300 transition-colors cursor-pointer" 
-              onClick={() => setExpandedSource(expandedSource === source.id ? null : source.id)}
+              onClick={() => setPreviewCapture(source)}
             >
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center shrink-0 border border-gray-100">
                   <FileText className="text-gray-500" size={24} />
                 </div>
                 <div>
-                  <h3 className="font-bold text-gray-900 line-clamp-1">{source.title}</h3>
+                  <h3 className="font-bold text-gray-900 line-clamp-1">{source.title || "Untitled"}</h3>
                   <div className="flex items-center gap-3 mt-1 text-xs">
-                    <span className="text-gray-500 font-medium uppercase tracking-wider">{source.sourceType}</span>
+                    <span className="text-gray-500 font-medium uppercase tracking-wider">{source.capture_type || "DOCUMENT"}</span>
                     <span className="w-1 h-1 rounded-full bg-gray-300"></span>
-                    <span className="text-gray-500">{new Date(source.createdAt).toLocaleDateString()}</span>
+                    <span className="text-gray-500">{new Date(source.created_at || Date.now()).toLocaleDateString()}</span>
                   </div>
                 </div>
               </div>
               <div className="flex flex-col items-end gap-1">
-                {getStatusIcon("ready")}
-                <span className={`text-[10px] font-extrabold uppercase tracking-wide text-green-700`}>
-                  {getStatusText("ready")}
+                {getStatusIcon(source.processing_status || "ready")}
+                <span className={`text-[10px] font-extrabold uppercase tracking-wide ${source.processing_status === "failed" ? "text-red-700" : "text-green-700"}`}>
+                  {getStatusText(source.processing_status || "ready")}
                 </span>
               </div>
             </div>
-            
-            {/* Expanded Detail View */}
-            {expandedSource === source.id && (
-              <div className="mt-2 p-5 bg-gray-50 rounded-2xl border border-gray-100 space-y-4">
-                {source.excerpt && (
-                  <div>
-                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Excerpt</span>
-                    <p className="text-sm text-gray-700 mt-1 leading-relaxed">{source.excerpt}</p>
-                  </div>
-                )}
-                <div className="flex gap-2">
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); setLocation("/artifacts"); }}
-                    className="flex items-center gap-2 px-4 py-2 bg-[#123d2d] text-white rounded-xl text-xs font-bold hover:bg-[#0d2a1f] transition-colors"
-                  >
-                    <Sparkles size={14} /> Generate Artifacts
-                  </button>
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); setLocation("/course-builder"); }}
-                    className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 border border-gray-200 rounded-xl text-xs font-bold hover:bg-gray-50 transition-colors"
-                  >
-                    <Brain size={14} /> Create Course
-                  </button>
-                  <button 
-                    className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 border border-gray-200 rounded-xl text-xs font-bold hover:bg-gray-50 transition-colors"
-                  >
-                    <Eye size={14} /> View Full
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         ))}
       </div>
+
+      {/* Preview Modal */}
+      {previewCapture && (
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 lg:p-10" onClick={() => setPreviewCapture(null)}>
+          <div className="bg-white w-full h-full max-w-5xl max-h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center shrink-0 border border-gray-200">
+                  <FileText size={20} className="text-gray-600" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 text-lg line-clamp-1">{previewCapture.title}</h3>
+                  <p className="text-xs text-gray-500 font-medium">Uploaded on {new Date(previewCapture.created_at || Date.now()).toLocaleDateString()}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setLocation(`/artifacts?captureId=${previewCapture.id}`); }}
+                  className="flex items-center gap-2 px-4 py-2 bg-[#123d2d] text-white rounded-xl text-xs font-bold hover:bg-[#0d2a1f] transition-colors"
+                >
+                  <Sparkles size={14} /> Generate Artifacts
+                </button>
+                <button 
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    localStorage.setItem("courseTargetId", previewCapture.id);
+                    setLocation(`/course-builder?captureId=${previewCapture.id}`); 
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 border border-gray-200 rounded-xl text-xs font-bold hover:bg-gray-50 transition-colors"
+                >
+                  <Brain size={14} /> Create Course
+                </button>
+                <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs font-bold uppercase tracking-wider">
+                  <CheckCircle2 size={14} /> AI Processed
+                </div>
+                <button onClick={() => setPreviewCapture(null)} className="p-2 hover:bg-gray-200 rounded-full transition-colors bg-gray-100 text-gray-600">
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-8 bg-white">
+              {(previewCapture.capture_type === 'screenshot' || previewCapture.capture_type === 'image') && previewCapture.file_url && (
+                <div className="flex justify-center mb-8">
+                  <img src={`http://localhost:8080${previewCapture.file_url}`} alt={previewCapture.title} className="max-w-full max-h-[50vh] object-contain rounded-xl shadow-md border border-gray-200" />
+                </div>
+              )}
+              <div className="prose prose-sm max-w-none text-gray-700">
+                {(previewCapture.normalized_content || previewCapture.original_content || "No content available.").split('\n').map((paragraph: string, idx: number) => (
+                  <p key={idx} className="mb-4 text-base leading-relaxed">{paragraph}</p>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

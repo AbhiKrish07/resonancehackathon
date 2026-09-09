@@ -61,11 +61,21 @@ class IngestionService:
             # 1. Normalization
             normalized_content = await cleanse_and_normalize_text(raw_content)
             
+            # 1.5 Synthesis & Tags
+            from services.ai_pipeline import generate_tags_and_summary_from_text
+            tags_and_summary = await generate_tags_and_summary_from_text(normalized_content or raw_content)
+            
+            # Merge into metadata
+            new_metadata = capture.get("metadata", {})
+            new_metadata["summary"] = tags_and_summary.get("summary", "")
+            new_metadata["tags"] = tags_and_summary.get("tags", [])
+            
             # 2. Embedding (384 dimensions)
             embedding = generate_embedding(normalized_content or raw_content)
 
             db.update_capture(capture_id, {
                 "normalized_content": normalized_content,
+                "metadata": new_metadata,
                 "embedding": embedding,
                 "processed_at": datetime.utcnow().isoformat()
             })

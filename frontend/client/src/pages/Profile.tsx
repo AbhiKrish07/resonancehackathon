@@ -447,10 +447,37 @@ export default function Profile() {
               </div>
               <Switch checked={profileData.cloudStorage} onCheckedChange={v => handleChange("cloudStorage", v)} />
             </div>
-            <div className="flex gap-4">
-              <Button variant="outline" disabled>Connect Google Drive</Button>
-              <Button variant="outline" disabled>Connect Dropbox</Button>
-              <Button variant="outline" disabled>Connect OneDrive</Button>
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between py-4 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 font-bold">G</div>
+                  <div>
+                    <h4 className="font-bold text-gray-900">Google Drive</h4>
+                    <p className="text-sm text-gray-500">Sync notes and PDFs</p>
+                  </div>
+                </div>
+                <Switch />
+              </div>
+              <div className="flex items-center justify-between py-4 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center text-blue-800 font-bold">D</div>
+                  <div>
+                    <h4 className="font-bold text-gray-900">Dropbox</h4>
+                    <p className="text-sm text-gray-500">Backup your artifacts</p>
+                  </div>
+                </div>
+                <Switch />
+              </div>
+              <div className="flex items-center justify-between py-4 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold">O</div>
+                  <div>
+                    <h4 className="font-bold text-gray-900">OneDrive</h4>
+                    <p className="text-sm text-gray-500">Microsoft cloud sync</p>
+                  </div>
+                </div>
+                <Switch />
+              </div>
             </div>
             <p className="text-sm text-gray-500">Cloud storage integration coming soon.</p>
           </div>
@@ -501,9 +528,7 @@ export default function Profile() {
                       </p>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50" disabled>
-                    Disconnect
-                  </Button>
+                  <Switch defaultChecked={app.connected} />
                 </div>
               ))}
             </div>

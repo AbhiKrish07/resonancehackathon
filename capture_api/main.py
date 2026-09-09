@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from routers import (
-    captures, spaces, retrieval, metrics, course, srs, audio, scorm, assessment, curriculum, artifacts, study, profile
+    memories, spaces, retrieval, metrics, course, srs, audio, scorm, assessment, curriculum, artifacts, study, profile
 )
 from services.db import get_db
 
@@ -17,8 +17,8 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(
-    title="Darwinity — Source-Grounded Study Companion",
-    description="Turns your textbook into a course, arranges it like a mind map, and keeps quizzing you offline.",
+    title="LearnLoop — AI-Powered Learning Loop",
+    description="Turn your materials into courses, master them with spaced repetition, and close the learning loop.",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -32,8 +32,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register all Context Intelligence routers
-app.include_router(captures.router)
+# Register LearnLoop routers
+app.include_router(memories.router)
 app.include_router(spaces.router)
 app.include_router(retrieval.router)
 app.include_router(metrics.router)
@@ -49,18 +49,36 @@ app.include_router(profile.router)
 
 
 
+from fastapi import UploadFile, File, Form, Depends
+from typing import Optional
+from uuid import UUID
+from dependencies import get_current_user
+from routers import memories
+from models.schemas import MemoryCreate
+
+@app.get("/captures")
+async def get_captures_alias(space_id: Optional[UUID] = None, current_user = Depends(get_current_user)):
+    return await memories.list_memories(space_id, current_user)
+
+@app.post("/captures/upload")
+async def upload_captures_alias(file: UploadFile = File(...), title: Optional[str] = Form(None), space_id: Optional[str] = Form(None), current_user = Depends(get_current_user)):
+    return await memories.upload_file_memory(file, title, space_id, current_user)
+
+@app.post("/captures")
+async def create_captures_alias(memory_in: MemoryCreate, current_user = Depends(get_current_user)):
+    return await memories.create_memory(memory_in, current_user)
+
 @app.get("/api/info")
 async def api_info():
     db = get_db()
     return {
-        "name": "Darwinity — AI-Powered Study Hub",
-        "tagline": "Your learning companion that turns chaos into courses.",
+        "name": "LearnLoop — AI-Powered Learning Loop",
+        "tagline": "Turn your materials into courses, master them with spaced repetition, and close the learning loop.",
         "version": "2.0.0",
         "status": "online",
         "stats": {
             "spaces_count": len(db.spaces),
-            "captures_count": len(db.captures),
-            "resolved_entities_count": len(db.resolved_entities),
+            "memories_count": len(db.captures),
             "active_contradictions_count": len(db.list_contradictions(status="active")),
         }
     }
@@ -68,11 +86,11 @@ async def api_info():
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "service": "darwinity-study-hub"}
+    return {"status": "ok", "service": "learnloop-api"}
 
 
-# Mount frontend vanilla UI at root so everything runs seamlessly on port 8080
-vanilla_static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "capture_vanilla")
+# Mount frontend vanilla UI
+vanilla_static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "learnloop_vanilla")
 if os.path.exists(vanilla_static_dir):
     app.mount("/vanilla", StaticFiles(directory=vanilla_static_dir, html=True), name="static_vanilla")
 

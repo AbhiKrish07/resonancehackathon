@@ -334,12 +334,21 @@ export function CourseBuilder() {
                       </div>
                       <p className="font-bold text-gray-900 mb-1">Let AI draft this lesson</p>
                       <p className="text-sm text-gray-500 mb-4">Darwinity will use your sources to generate objectives and blocks.</p>
-                      <Button className="bg-[#123d2d] hover:bg-[#0d2a1f] text-white">Generate Content</Button>
+                      <Button 
+                        onClick={() => generateAST.mutate({ courseId: course.id })}
+                        disabled={generateAST.isPending}
+                        className="bg-[#123d2d] hover:bg-[#0d2a1f] text-white"
+                      >
+                        {generateAST.isPending ? "Generating..." : "Generate Content"}
+                      </Button>
                     </div>
                   )}
 
                   <div className="pt-8 opacity-50 hover:opacity-100 transition">
-                    <button className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 w-full p-4 border border-dashed border-gray-300 rounded-xl justify-center">
+                    <button 
+                      onClick={() => generateAST.mutate({ courseId: course.id })}
+                      className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 w-full p-4 border border-dashed border-gray-300 rounded-xl justify-center"
+                    >
                       <Plus size={16} /> Add Objective
                     </button>
                   </div>

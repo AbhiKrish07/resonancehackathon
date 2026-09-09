@@ -40,10 +40,34 @@ class RetrievalService:
         # 1. Embed query
         query_emb = generate_embedding(query)
 
-        # 2. Vector search inside space
-        retrieved_captures = db.search_captures(query_embedding=query_emb, space_id=space_id, top_k=top_k)
+        # 2. Vector search + keyword fallback inside space (or globally)
+        retrieved_captures = db.search_captures(
+            query_embedding=query_emb, 
+            space_id=space_id, 
+            top_k=top_k,
+            query_text=query
+        )
+        
+        # 2a. If nothing found, widen search globally (no space filter)
+        if not retrieved_captures and space_id:
+            retrieved_captures = db.search_captures(
+                query_embedding=query_emb,
+                space_id=None,
+                top_k=top_k,
+                query_text=query
+            )
 
-        # 2b. Extract entity hints from query and boost captures with matching entities
+        # 3. Retrieve all captures in space for naive context comparison
+        all_space_captures = db.list_captures(space_id=space_id)
+        
+        # 3a. If still empty (no embeddings yet), fall back to plain text of all captures
+        if not retrieved_captures:
+            retrieved_captures = db.list_captures(space_id=None)[:top_k]
+            for cap in retrieved_captures:
+                cap["relevance_score"] = 0.5
+
+        total_captures_count = len(all_space_captures)
+
         entity_hints = re.findall(r'@(\w[\w\s]*\w)', query)
         cap_words = re.findall(r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b', query)
         entity_hints.extend(cap_words)
@@ -61,9 +85,6 @@ class RetrievalService:
 
             retrieved_captures.sort(key=lambda x: x.get("relevance_score", 0), reverse=True)
 
-        # 3. Retrieve all captures in space for naive context comparison
-        all_space_captures = db.list_captures(space_id=space_id)
-        total_captures_count = len(all_space_captures)
 
         # Calculate naive context (all captures in space)
         all_content_str = "\n\n".join([

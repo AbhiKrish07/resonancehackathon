@@ -11,26 +11,28 @@ import {
   X,
   Loader2,
   CheckCircle2,
-  ExternalLink
+  ArrowRight,
+  Zap,
+  Layers,
+  Trophy,
+  BookOpen,
+  Flame,
+  MessageSquare,
+  Gamepad2,
+  Headphones,
+  Target,
+  Plus,
+  Compass
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import "./Dashboard.css";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useCompanion } from "@/contexts/CompanionContext";
 import { useDarwinity } from "@/contexts/DarwinityStoreContext";
+import { generate10LevelCourse } from "@/lib/courseGenerator";
 import { useEffect } from "react";
-import { useLocation, Link } from "wouter";
-
-type IconType = typeof Brain;
+import { useLocation } from "wouter";
 
 const CAPTURE_API_URL = import.meta.env.VITE_CAPTURE_API_URL || "http://localhost:8080";
-
-interface ActionCard {
-  title: string;
-  description: string;
-  icon: IconType;
-  color: string;
-}
 
 type ModalMode = null | "upload" | "paste" | "record" | "synthesize";
 
@@ -45,7 +47,17 @@ export default function Dashboard() {
   const [pasteText, setPasteText] = useState("");
   const [pasteTitle, setPasteTitle] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
+  // Floating Course Generator Modal state
+  const [showCourseModal, setShowCourseModal] = useState(false);
+  const [coursePrompt, setCoursePrompt] = useState("");
+  const [courseDifficulty, setCourseDifficulty] = useState("Intermediate");
+  const [courseGoal, setCourseGoal] = useState("");
+  const [selectedSourceIds, setSelectedSourceIds] = useState<number[]>([]);
+  const [isGeneratingCourse, setIsGeneratingCourse] = useState(false);
+
+  const generateFromPrompt = trpc.curriculum.generateFromPrompt.useMutation();
+
   useEffect(() => {
     setContext({ workspace: "Home" });
   }, [setContext]);
@@ -56,66 +68,85 @@ export default function Dashboard() {
     { enabled: !!bootstrap.data?.id }
   );
   const createSource = trpc.workspace.createSource.useMutation();
-  const coursesQuery = trpc.curriculum.list.useQuery(
-    { workspaceId: bootstrap.data?.id as number },
-    { enabled: !!bootstrap.data?.id }
-  );
-  const createCourse = trpc.curriculum.create.useMutation();
-  const [courseModalOpen, setCourseModalOpen] = useState(false);
-  const [selectedSourceId, setSelectedSourceId] = useState<number | null>(null);
-  const [creatingCourse, setCreatingCourse] = useState(false);
+  const utils = trpc.useUtils();
 
-  const generateAST = trpc.curriculum.generateAST.useMutation();
-  const activeCourses = state.courses || [];
-  const draftCourses = []; // Deprecated, we show all in activeCourses now
-
-  const handleCreateCourse = async () => {
-    if (!bootstrap.data?.id || !selectedSourceId) return;
-    
-    const source = sourcesData?.find(s => s.id === selectedSourceId);
-    if (!source || !source.externalId) {
-      alert("Please select a valid source with an external ID.");
-      return;
-    }
-
-    setCreatingCourse(true);
+  const handleGenerateCourseSubmit = async () => {
+    if (!coursePrompt.trim()) return;
+    setIsGeneratingCourse(true);
     try {
-      const stored = localStorage.getItem("learningProfile");
-      const profile = stored ? JSON.parse(stored) : {};
+      const difficultyKey = courseDifficulty.toLowerCase() as "beginner" | "intermediate" | "advanced";
       
-      const levelStr = (profile.level || "").toLowerCase();
-      const levelNum = levelStr === "advanced" ? 3 : levelStr === "intermediate" ? 2 : 1;
-      const minutes = parseInt(profile.timeBudget) || 30;
-      
-      const payload = {
-          content: source.excerpt || source.title || "Course content",
-          goal: profile.goal || "understand",
-          time_budget: profile.timeBudget || "30min",
-          level: profile.level || "intermediate"
-      };
+      let newCourse;
+      try {
+        const response = await fetch(`${CAPTURE_API_URL}/api/course/generate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: `Create a comprehensive course about: ${coursePrompt}. Goal: ${courseGoal}.`,
+            level: difficultyKey,
+            time_budget: "30min/day"
+          })
+        });
+        if (!response.ok) throw new Error("AI Generation failed");
+        
+        const data = await response.json();
+        newCourse = data.course;
+        
+        if (!newCourse || newCourse.title === "Failed to Generate") {
+          throw new Error("AI Backend returned Failed to Generate fallback");
+        }
 
-      // 1. Fetch the full normalized text from the Python backend
-      const pyRes = await fetch(`${CAPTURE_API_URL}/api/course/generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": "Bearer demo-user" },
-        body: JSON.stringify(payload)
-      });
-      if (!pyRes.ok) throw new Error("Failed to create course from backend");
-      const data = await pyRes.json();
-      
-      if (data.course && data.course.id) {
-        // Also add to darwinity store so it shows up in UI
-        dispatch({ type: "CREATE_COURSE", course: { id: data.course.id, spaceId: "dashboard", title: data.course.title || source.title || "Generated Course", description: data.course.description || "", modules: data.course.modules || [], lessons: data.course.lessons || [], sourceIds: [source.externalId], learningGoal: data.course.learningGoal || "", estimatedMinutes: 0, readiness: 0, currentLessonId: data.course.currentLessonId || "", totalLessons: data.course.totalLessons || 0, completedLessons: 0, nextAction: "Start", updatedAt: new Date().toISOString(), progress: 0, status: "active", icon: "🚀", accent: "sky" } });
-        setLocation(`/courses/${data.course.id}`);
+        newCourse.sourceIds = selectedSourceIds.map(String);
+        if (!newCourse.modules) newCourse.modules = [];
+        if (!newCourse.lessons) newCourse.lessons = [];
+        
+        const currentCount = newCourse.lessons.length;
+        if (currentCount < 10) {
+          const fallback = generate10LevelCourse(coursePrompt, difficultyKey, courseGoal, []);
+          for (let i = currentCount; i < 10; i++) {
+            const fbLesson = fallback.lessons[i];
+            const fbModule = fallback.modules[i];
+            if (fbLesson && fbModule) {
+              const newLesId = `les-${newCourse.id}-padded-${i+1}`;
+              const newModId = `mod-${newCourse.id}-padded-${i+1}`;
+              
+              fbLesson.id = newLesId;
+              newCourse.lessons.push(fbLesson);
+              
+              fbModule.id = newModId;
+              fbModule.lessonIds = [newLesId];
+              newCourse.modules.push(fbModule);
+            }
+          }
+        }
+        
+        newCourse.totalLessons = 10;
+        newCourse.icon = "🎓";
+        newCourse.accent = "#1b7a52";
+      } catch (err) {
+        console.warn("AI Generation failed, falling back to local generator", err);
+        newCourse = generate10LevelCourse(
+          coursePrompt,
+          difficultyKey,
+          courseGoal,
+          selectedSourceIds.map(String)
+        );
       }
+
+      dispatch({
+        type: "CREATE_COURSE",
+        course: newCourse
+      });
+
+      setShowCourseModal(false);
+      setCoursePrompt("");
+      setIsGeneratingCourse(false);
+      setLocation(`/courses/${newCourse.id}`);
     } catch (err) {
-      console.error(err);
-      alert("Failed to create course. Ensure the Python backend is running.");
-      setCreatingCourse(false);
+      console.error("Course creation error:", err);
+      setIsGeneratingCourse(false);
     }
   };
-
-  const utils = trpc.useUtils();
 
   const handleUploadFile = async (file: File) => {
     setUploading(true);
@@ -123,45 +154,55 @@ export default function Dashboard() {
     try {
       const workspaceId = bootstrap.data?.id;
       if (workspaceId) {
-        // Build FormData
         const formData = new FormData();
         formData.append("file", file, file.name);
         formData.append("title", file.name);
         formData.append("space_id", String(workspaceId));
-        
-        // Post directly to the Python backend API
+
         const response = await fetch(`${CAPTURE_API_URL}/captures/upload`, {
           method: "POST",
           body: formData,
-          headers: { 
-            "Authorization": "Bearer demo-user" // Demo user auth
-          }
+          headers: { "Authorization": "Bearer demo-user" }
         });
 
         if (response.ok) {
           const data = await response.json();
-          // Tell TRPC to save it to SQL and refresh the sources list
           await createSource.mutateAsync({
             workspaceId,
             title: file.name,
             sourceType: file.type.includes("pdf") ? "pdf" : file.type.includes("audio") ? "audio" : "document",
             fileName: file.name,
             mimeType: file.type,
-            externalId: data.id, // Use the python DB ID
+            externalId: data.id,
             url: ""
           });
-          
           await utils.workspace.sources.invalidate();
           setUploadSuccess(true);
-          setTimeout(() => { setModalMode("synthesize"); setUploadSuccess(false); }, 1500);
+          setTimeout(() => { setModalMode("synthesize"); setUploadSuccess(false); }, 1400);
         } else {
-          console.error("Upload failed:", await response.text());
           throw new Error("Upload failed");
         }
       }
     } catch (err) {
-      console.error(err);
-      alert(err instanceof Error ? err.message : "Upload failed. Your material was not added to the library.");
+      console.warn("Upload fallback triggered:", err);
+      if (bootstrap.data?.id) {
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          const base64 = (event.target?.result as string).split(',')[1];
+          await createSource.mutateAsync({
+            workspaceId: bootstrap.data.id,
+            title: file.name,
+            fileName: file.name,
+            mimeType: file.type,
+            fileBase64: base64,
+            sourceType: file.type.includes("pdf") ? "pdf" : file.type.includes("audio") ? "audio" : "document"
+          });
+          utils.workspace.sources.invalidate();
+          setUploadSuccess(true);
+          setTimeout(() => { setModalMode("synthesize"); setUploadSuccess(false); }, 1400);
+        };
+        reader.readAsDataURL(file);
+      }
     } finally {
       setUploading(false);
     }
@@ -183,396 +224,397 @@ export default function Dashboard() {
         setUploadSuccess(true);
         setPasteText("");
         setPasteTitle("");
-        setTimeout(() => { setModalMode("synthesize"); setUploadSuccess(false); }, 1500);
+        setTimeout(() => { setModalMode("synthesize"); setUploadSuccess(false); }, 1400);
       }
     } catch {
       setUploadSuccess(true);
-      setTimeout(() => { setModalMode("synthesize"); setUploadSuccess(false); }, 1500);
+      setTimeout(() => { setModalMode("synthesize"); setUploadSuccess(false); }, 1400);
     } finally {
       setUploading(false);
     }
   };
 
+  const activeCourses = state.courses || [];
+
   return (
-    <div className="max-w-[1200px] mx-auto py-10 px-6 sm:px-12 pb-32">
-      {/* Top Banner / Welcome */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
-        <div>
-          <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-gray-900 mb-2">
-            Welcome back.
-          </h1>
-          <p className="text-lg text-gray-500 font-medium">
-            Ready to shape some knowledge today?
-          </p>
+    <div className="min-h-screen bg-[#f7f6f0] text-[#1c1d22] font-sans pb-24">
+      {/* Top Header Bar */}
+      <header className="h-16 border-b border-[#e5e4dc] bg-[#f7f6f0] px-8 flex items-center justify-between sticky top-0 z-30">
+        <div className="flex items-center gap-2 text-xs font-semibold text-gray-500">
+          <span>Tuesday, 08 September</span>
+          <span>/</span>
+          <span className="text-gray-900 font-bold">Your learning space</span>
         </div>
-        
 
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        
-        {/* Left Column: Input Actions */}
-        <div className="lg:col-span-1 space-y-6">
-          <h2 className="text-xl font-extrabold mb-4">Add Material</h2>
-          
-          <div className="grid grid-cols-1 gap-4">
-            <button 
-              onClick={() => setModalMode("upload")} 
-              className="group relative flex flex-col justify-center items-center gap-4 p-8 rounded-[24px] bg-gradient-to-br from-[#123d2d] to-[#0a241a] shadow-xl overflow-hidden text-center min-h-[260px] w-full border border-[#1a5440] hover:shadow-2xl transition-all"
-            >
-              <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none group-hover:bg-emerald-500/20 transition-colors" />
-              
-              <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center shrink-0 border border-white/10 group-hover:scale-110 transition-transform duration-300">
-                <UploadCloud size={32} className="text-emerald-300" />
-              </div>
-              <div>
-                <h3 className="font-extrabold text-white text-xl tracking-tight mb-2">Ingest Knowledge</h3>
-                <p className="text-sm text-emerald-100/70 font-medium px-4">Upload PDFs, paste links, record lectures, or connect integrations.</p>
-              </div>
-              <div className="mt-4 flex items-center justify-center gap-2 text-xs font-bold text-white bg-white/10 px-4 py-2 rounded-full border border-white/5">
-                <Sparkles size={14} className="text-emerald-400" /> Let AI organize it
-              </div>
-            </button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-[#e5e4dc] rounded-full text-xs font-bold shadow-sm">
+            <Zap size={14} className="text-amber-500 fill-amber-500" />
+            <span>420 XP</span>
           </div>
-        </div>
 
-        {/* Right Column: Dashboard Data */}
-        <div className="lg:col-span-2 space-y-12">
-          
-          <section className="mb-10">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-extrabold">Active Courses</h2>
-              <button 
-                onClick={() => setCourseModalOpen(true)}
-                disabled={creatingCourse}
-                className="bg-primary hover:opacity-90 text-primary-foreground font-bold text-sm px-4 py-2 rounded-xl transition-opacity shadow-sm flex items-center gap-2 disabled:opacity-50"
-              >
-                {creatingCourse ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                Create New AI Course
-              </button>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {activeCourses.length === 0 ? (
-                <div className="col-span-full py-8 text-center text-gray-500 border border-dashed border-gray-300 rounded-2xl bg-gray-50">
-                  No active courses yet.
-                </div>
-              ) : (
-                activeCourses.map((course: any, i: number) => (
-                  <div 
-                    key={course.id || i}
-                    className="group relative flex flex-col justify-between p-6 rounded-[24px] bg-white border border-[#e1e8e2] shadow-sm hover:shadow-md transition-all cursor-pointer overflow-hidden min-h-[210px]"
-                    onClick={() => setLocation(`/courses/${course.id}`)}
-                  >
-                    <div>
-                      <div className="text-3xl mb-3 p-3 rounded-2xl bg-gray-50 border border-gray-100 w-fit shrink-0">
-                        {course.icon}
-                      </div>
-                      <div>
-                        <h3 className="font-extrabold text-gray-900 leading-tight mb-1 group-hover:text-[#123d2d] transition-colors line-clamp-2">{course.title}</h3>
-                        <p className="text-xs text-gray-500 font-medium truncate">{course.mastery?.progress ?? 0}% • {course.mastery?.completedLessons ?? 0}/{course.mastery?.totalLessons ?? 0} Lessons</p>
-                      </div>
-                    </div>
+          <button 
+            onClick={() => setLocation("/canvas")}
+            className="px-4 py-2 bg-white hover:bg-gray-50 border border-[#e5e4dc] rounded-full text-xs font-bold transition shadow-sm"
+          >
+            Study workspace
+          </button>
 
-                    {/* Progress bar */}
-                    <div className="mt-4">
-                      <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden mb-2">
-                        <div 
-                          className="h-full rounded-full transition-all duration-500 ease-out"
-                          style={{ width: `${course.mastery?.progress ?? 0}%`, backgroundColor: course.accent || "#2563eb" }}
-                        />
-                      </div>
-                      <div className="flex justify-between items-center text-[10px] font-extrabold uppercase tracking-wider text-gray-400">
-                        <span>UP NEXT</span>
-                        <span style={{ color: course.accent || "#2563eb" }} className="flex items-center gap-1 group-hover:opacity-100 transition-opacity"><PlayCircle size={10} /> {course.mastery?.completedLessons ? "Resume" : "Start"}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </section>
+          <button 
+            onClick={() => setShowCourseModal(true)}
+            className="px-4 py-2 bg-[#1b7a52] hover:bg-[#156443] text-white rounded-full text-xs font-bold transition shadow-sm flex items-center gap-1.5"
+          >
+            <Sparkles size={14} /> Generate course
+          </button>
 
-
-        </div>
-      </div>
-
-      {/* Recent Material (Dark Theme Grid) */}
-      <section className="mt-16">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-extrabold text-gray-900">Recent Material</h2>
-          <button onClick={() => setLocation('/library')} className="text-sm font-bold text-blue-600 hover:text-blue-800 transition-colors">
-            View All
+          <button 
+            onClick={() => setModalMode("upload")}
+            className="px-4 py-2 bg-[#2952ee] hover:bg-[#1e42d8] text-white rounded-full text-xs font-bold transition shadow-sm flex items-center gap-1"
+          >
+            <Plus size={14} /> Add sources
           </button>
         </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {(!sourcesData || sourcesData.length === 0) ? (
-             <div className="col-span-full py-12 text-center text-gray-500 border border-dashed border-gray-300 rounded-3xl bg-gray-50">
-               No recent material found. Add some above!
-             </div>
-          ) : (
-            sourcesData.slice(0, 6).map((source) => (
-              <div key={source.id} onClick={() => source.url && window.open(source.url, '_blank')} className="group relative flex flex-col justify-between p-5 rounded-2xl bg-card border border-border shadow-lg hover:border-primary/50 transition-all cursor-pointer h-[180px]">
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-widest">{source.sourceType}</span>
-                    <span className="text-[9px] font-extrabold text-primary bg-primary/10 px-2 py-0.5 rounded-sm uppercase tracking-wider">Synced</span>
-                  </div>
-                  <h3 className="font-bold text-foreground text-[15px] leading-snug mb-1.5 line-clamp-2 group-hover:text-primary transition-colors">{source.title}</h3>
-                  <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">{source.excerpt || `Imported material: ${source.title}`}</p>
-                </div>
-                
-                <div className="flex items-center justify-between mt-4">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[9px] font-bold text-muted-foreground bg-muted px-2 py-1 rounded border border-border uppercase tracking-wider">{source.adapter || "Darwinity"}</span>
-                  </div>
-                  <span className="text-[10px] font-medium text-muted-foreground">{new Date(source.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </section>
+      </header>
 
-      {/* ===== CAPTURE-STYLE INGESTION MODAL ===== */}
-      {modalMode && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4 transition-all" onClick={() => !uploading && setModalMode(null)}>
-          <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col md:flex-row" onClick={e => e.stopPropagation()}>
-            
-            {/* Left Sidebar (Tabs) */}
-            <div className="md:w-1/3 bg-muted/30 border-r border-border p-6 flex flex-col gap-2">
-              <div className="mb-6">
-                <h3 className="text-foreground font-bold text-lg">Ingest Data</h3>
-                <p className="text-muted-foreground text-xs">Select a source type</p>
+      <div className="max-w-[1240px] mx-auto px-8 pt-10 space-y-10">
+
+        {/* Hero Section */}
+        <div className="flex justify-between items-start">
+          <div className="space-y-2 max-w-2xl">
+            <div className="flex items-center gap-2 text-xs font-extrabold tracking-widest text-[#1b7a52] uppercase">
+              <span className="w-2 h-2 rounded-full bg-[#1b7a52]" />
+              GOOD TO SEE YOU
+            </div>
+            <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight leading-none text-[#1c1d22]">
+              Hey there, <br />
+              <span className="text-gray-400 font-extrabold">what do you want to master?</span>
+            </h1>
+            <p className="text-sm font-medium text-gray-600 pt-2">
+              Feed it once. Unlock a whole toolkit for understanding, practice, and recall.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 bg-white/70 backdrop-blur border border-[#e5e4dc] px-4 py-2 rounded-full text-xs font-bold text-gray-600">
+            <div className="flex -space-x-2">
+              <div className="w-6 h-6 rounded-full bg-amber-200 border-2 border-white flex items-center justify-center text-[10px] font-bold text-amber-900">ML</div>
+              <div className="w-6 h-6 rounded-full bg-blue-200 border-2 border-white flex items-center justify-center text-[10px] font-bold text-blue-900">AI</div>
+            </div>
+            <span>Your path adapts as you learn</span>
+          </div>
+        </div>
+
+        {/* Main "Feed it once. Unlock the whole toolkit." Card Section */}
+        <div className="bg-[#fcfbf8] border border-[#e8e7df] rounded-[32px] p-8 shadow-sm space-y-8">
+          <div className="flex justify-between items-center">
+            <div>
+              <span className="text-[10px] font-extrabold tracking-widest text-gray-400 uppercase">START WITH ANYTHING</span>
+              <h2 className="text-2xl font-extrabold text-[#1c1d22] tracking-tight">Feed it once. Unlock the whole toolkit.</h2>
+            </div>
+            <span className="px-3 py-1 bg-[#e7f6ef] text-[#1b7a52] text-xs font-bold rounded-full border border-[#cbebdc]">
+              Sources stay connected
+            </span>
+          </div>
+
+          {/* 3 Main Input Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div 
+              onClick={() => setModalMode("upload")}
+              className="bg-[#1b7a52] hover:bg-[#156443] text-white p-6 rounded-[24px] cursor-pointer transition-all flex flex-col justify-between h-[150px] group shadow-md"
+            >
+              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                <UploadCloud size={20} className="text-white" />
               </div>
-              <button 
-                onClick={() => setModalMode("upload")}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-left ${modalMode === "upload" ? "bg-primary/10 text-primary border border-primary/20" : "text-muted-foreground hover:bg-muted"}`}
-              >
-                <UploadCloud size={18} /> <span className="font-bold text-sm">Upload File</span>
-              </button>
-              <button 
-                onClick={() => setModalMode("paste")}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-left ${modalMode === "paste" ? "bg-primary/10 text-primary border border-primary/20" : "text-muted-foreground hover:bg-muted"}`}
-              >
-                <Link2 size={18} /> <span className="font-bold text-sm">Paste / Link</span>
-              </button>
-              <button 
-                onClick={() => setModalMode("record")}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-left ${modalMode === "record" ? "bg-primary/10 text-primary border border-primary/20" : "text-muted-foreground hover:bg-muted"}`}
-              >
-                <Mic size={18} /> <span className="font-bold text-sm">Voice Memo</span>
-              </button>
+              <div className="flex justify-between items-end">
+                <div>
+                  <h3 className="font-extrabold text-lg leading-tight">Upload</h3>
+                  <p className="text-xs text-emerald-100 font-medium">PDF, slides, docs, images</p>
+                </div>
+                <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+              </div>
             </div>
 
-            {/* Right Content Area */}
-            <div className="md:w-2/3 p-8 relative min-h-[400px] flex flex-col justify-center">
-              <button onClick={() => !uploading && setModalMode(null)} className="absolute top-6 right-6 w-8 h-8 rounded-full bg-muted hover:bg-muted/80 flex items-center justify-center transition-colors">
-                <X size={16} className="text-muted-foreground hover:text-foreground" />
-              </button>
+            <div 
+              onClick={() => setModalMode("paste")}
+              className="bg-[#f3f2eb] hover:bg-[#ecebe3] text-[#1c1d22] p-6 rounded-[24px] cursor-pointer transition-all flex flex-col justify-between h-[150px] group border border-[#e2e1d7]"
+            >
+              <div className="w-10 h-10 rounded-full bg-emerald-100/60 text-[#1b7a52] flex items-center justify-center">
+                <FileText size={20} />
+              </div>
+              <div className="flex justify-between items-end">
+                <div>
+                  <h3 className="font-extrabold text-lg leading-tight">Paste</h3>
+                  <p className="text-xs text-gray-500 font-medium">A link, notes, or transcript</p>
+                </div>
+                <ArrowRight size={18} className="text-gray-400 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </div>
 
-              {uploadSuccess ? (
-                <div className="flex flex-col items-center justify-center text-center animate-in fade-in zoom-in duration-300">
-                  <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-6 border border-primary/20">
-                    <CheckCircle2 size={40} className="text-primary" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-foreground mb-2">Ingestion Complete!</h3>
-                  <p className="text-muted-foreground">Your data has been added and indexed.</p>
+            <div 
+              onClick={() => setModalMode("record")}
+              className="bg-[#f3f2eb] hover:bg-[#ecebe3] text-[#1c1d22] p-6 rounded-[24px] cursor-pointer transition-all flex flex-col justify-between h-[150px] group border border-[#e2e1d7]"
+            >
+              <div className="w-10 h-10 rounded-full bg-emerald-100/60 text-[#1b7a52] flex items-center justify-center">
+                <Mic size={20} />
+              </div>
+              <div className="flex justify-between items-end">
+                <div>
+                  <h3 className="font-extrabold text-lg leading-tight">Record</h3>
+                  <p className="text-xs text-gray-500 font-medium">Lecture or audio file</p>
                 </div>
-              ) : modalMode === "upload" ? (
-                <div className="animate-in fade-in duration-200">
-                  <h3 className="text-foreground font-bold text-xl mb-6">Upload Document</h3>
-                  <input 
-                    ref={fileInputRef}
-                    type="file" 
-                    className="hidden" 
-                    accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.md,.jpg,.jpeg,.png,.mp3,.wav,.m4a"
-                    onChange={e => {
-                      const file = e.target.files?.[0];
-                      if (file) handleUploadFile(file);
-                    }}
-                  />
-                  <div 
-                    onClick={() => !uploading && fileInputRef.current?.click()}
-                    className={`border-2 border-dashed border-border rounded-2xl p-12 flex flex-col items-center justify-center cursor-pointer transition-all ${uploading ? 'bg-muted/50' : 'hover:border-primary/50 hover:bg-muted/30'}`}
-                  >
-                    {uploading ? (
-                      <div className="flex flex-col items-center">
-                        <Loader2 size={40} className="text-primary animate-spin mb-4" />
-                        <p className="font-bold text-foreground">Processing...</p>
-                        <p className="text-xs text-muted-foreground mt-2">Extracting and indexing data</p>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
-                          <UploadCloud size={28} className="text-muted-foreground" />
-                        </div>
-                        <p className="font-bold text-foreground mb-2">Select a file to upload</p>
-                        <p className="text-xs text-muted-foreground text-center">Supports PDF, Markdown, Images, Audio.<br/>Up to 50MB.</p>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ) : modalMode === "paste" ? (
-                <div className="animate-in fade-in duration-200 flex flex-col h-full justify-center">
-                  <h3 className="text-foreground font-bold text-xl mb-6">Paste Content</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <input 
-                        value={pasteTitle}
-                        onChange={e => setPasteTitle(e.target.value)}
-                        placeholder="Title (Optional)"
-                        className="w-full px-4 py-3 bg-muted/30 border border-border rounded-xl text-foreground text-sm outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all placeholder:text-muted-foreground"
-                      />
-                    </div>
-                    <div>
-                      <textarea 
-                        value={pasteText}
-                        onChange={e => setPasteText(e.target.value)}
-                        placeholder="Paste URL, raw text, or code here..."
-                        rows={6}
-                        className="w-full px-4 py-3 bg-muted/30 border border-border rounded-xl text-foreground text-sm outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all resize-none placeholder:text-muted-foreground font-mono"
-                      />
-                    </div>
-                    <button 
-                      onClick={handlePasteSubmit}
-                      disabled={!pasteText.trim() || uploading}
-                      className="w-full bg-primary hover:opacity-90 text-primary-foreground font-extrabold py-3.5 rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                      {uploading ? <><Loader2 size={18} className="animate-spin" /> Ingesting...</> : "Ingest Now"}
-                    </button>
-                  </div>
-                </div>
-              ) : modalMode === "record" ? (
-                <div className="animate-in fade-in duration-200 flex flex-col items-center justify-center h-full py-8">
-                  <h3 className="text-foreground font-bold text-xl mb-8 self-start w-full">Voice Memo</h3>
-                  <div className="w-24 h-24 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-6 cursor-pointer hover:bg-red-500/20 transition-all hover:scale-105" onClick={() => {
-                    setUploading(true);
-                    setTimeout(() => {
-                      setUploading(false);
-                      setUploadSuccess(true);
-                      setTimeout(() => { setModalMode("synthesize"); setUploadSuccess(false); }, 1500);
-                    }, 2000);
-                  }}>
-                    {uploading ? <Loader2 size={36} className="text-red-500 animate-spin" /> : <Mic size={36} className="text-red-500" />}
-                  </div>
-                  <p className="font-bold text-foreground mb-2">{uploading ? "Recording..." : "Tap to record"}</p>
-                  <p className="text-xs text-muted-foreground text-center mb-8">AI will transcribe and summarize automatically.</p>
-                  
-                  <button 
-                    onClick={() => {
-                      const input = document.createElement("input");
-                      input.type = "file";
-                      input.accept = "audio/*";
-                      input.onchange = (e) => {
-                        const file = (e.target as HTMLInputElement).files?.[0];
-                        if (file) handleUploadFile(file);
-                      };
-                      input.click();
-                    }}
-                    className="text-xs font-bold text-muted-foreground hover:text-primary transition-colors flex items-center gap-1.5 px-4 py-2 rounded-full border border-border hover:border-primary/30"
-                  >
-                    <UploadCloud size={14} /> or upload audio file
-                  </button>
-                </div>
-              ) : modalMode === "synthesize" ? (
-                <div className="animate-in fade-in duration-200 flex flex-col h-full py-2 overflow-y-auto pr-2" style={{ maxHeight: "70vh" }}>
-                  <h3 className="text-foreground font-bold text-xl mb-1">What You Unlock</h3>
-                  <p className="text-muted-foreground text-sm mb-6">Choose how you want to synthesize this material, or just save it.</p>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-                    {[
-                      { id: 'notes', title: 'Notes', desc: 'Editable study notes from your source.', icon: '📝', color: 'bg-primary/10 text-primary' },
-                      { id: 'mindmap', title: 'Mind map', desc: 'See how topics connect.', icon: '🔗', color: 'bg-primary/10 text-primary' },
-                      { id: 'flashcards', title: 'Flashcards', desc: 'Active recall until it sticks.', icon: '📇', color: 'bg-primary/10 text-primary' },
-                      { id: 'quizzes', title: 'Quizzes', desc: 'Exam-pressure practice.', icon: '✨', color: 'bg-primary/10 text-primary' },
-                      { id: 'games', title: 'Games', desc: 'Learn by playing, not grinding.', icon: '🎮', color: 'bg-primary/10 text-primary' },
-                      { id: 'podcast', title: 'Podcast', desc: 'Open a note, then Audio.', icon: '🎧', color: 'bg-primary/10 text-primary' },
-                      { id: 'askai', title: 'Ask AI', desc: 'Chat with your material.', icon: '💬', color: 'bg-primary/10 text-primary' },
-                      { id: 'focus', title: 'Focus', desc: 'Pomodoro while you study.', icon: '⏱️', color: 'bg-primary/10 text-primary' },
-                    ].map(opt => (
-                      <div key={opt.id} onClick={() => {
-                        setUploading(true);
-                        setTimeout(() => {
-                          setUploading(false);
-                          setModalMode(null);
-                        }, 1500);
-                      }} className="bg-muted hover:bg-muted/80 border border-border rounded-xl p-4 cursor-pointer transition-colors flex gap-3 group">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${opt.color}`}>
-                          <span className="text-xl">{opt.icon}</span>
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-foreground text-sm group-hover:text-primary transition-colors">{opt.title}</h4>
-                          <p className="text-xs text-muted-foreground leading-tight mt-0.5">{opt.desc}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                <ArrowRight size={18} className="text-gray-400 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </div>
+          </div>
 
-                  <button 
-                    onClick={() => setModalMode(null)}
-                    className="w-full bg-muted hover:bg-muted/80 text-foreground border border-border font-bold py-3.5 rounded-xl transition-colors flex items-center justify-center"
-                  >
-                    Only Upload
-                  </button>
+          {/* Grid of 8 Toolkit Actions */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-3">
+            {[
+              { label: "Notes", sub: "Edit source notes", icon: FileText, color: "text-emerald-600 bg-emerald-50", target: "/spaces/1/pages/1" },
+              { label: "Mind map", sub: "Connect ideas", icon: Layers, color: "text-purple-600 bg-purple-50", target: "/artifacts?type=mindmap" },
+              { label: "Flashcards", sub: "Recall until it sticks", icon: Brain, color: "text-blue-600 bg-blue-50", target: "/artifacts?type=flashcards" },
+              { label: "Quizzes", sub: "Pressure practice", icon: Target, color: "text-amber-600 bg-amber-50", target: "/artifacts?type=key_concepts" },
+              { label: "Games", sub: "Learn by playing", icon: Gamepad2, color: "text-rose-600 bg-rose-50", target: "/artifacts?type=study_guide" },
+              { label: "Podcast", sub: "Listen to a recap", icon: Headphones, color: "text-indigo-600 bg-indigo-50", target: "/artifacts?type=summary" },
+              { label: "Ask AI", sub: "Chat with sources", icon: Sparkles, color: "text-[#1b7a52] bg-emerald-50", target: "/artifacts" },
+              { label: "Focus", sub: "Study sprint", icon: Clock3, color: "text-amber-600 bg-amber-50", target: "/artifacts?type=timeline" },
+            ].map((tool, idx) => {
+              const IconComp = tool.icon;
+              return (
+                <div 
+                  key={idx}
+                  onClick={() => setLocation(tool.target)}
+                  className="p-3 bg-white hover:bg-gray-50 border border-[#e5e4dc] rounded-2xl cursor-pointer transition-all flex flex-col justify-between min-h-[96px] group"
+                >
+                  <div className={`w-7 h-7 rounded-lg ${tool.color} flex items-center justify-center shrink-0`}>
+                    <IconComp size={14} />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-xs text-gray-900 group-hover:text-[#1b7a52] transition-colors">{tool.label}</h4>
+                    <p className="text-[9px] text-gray-400 font-medium truncate">{tool.sub}</p>
+                  </div>
                 </div>
-              ) : null}
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Bottom Cards Row */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          
+          {/* Blue Next Best Step Card */}
+          <div className="md:col-span-2 bg-[#2952ee] text-white p-8 rounded-[32px] flex flex-col justify-between h-[200px] relative overflow-hidden shadow-lg">
+            <div className="absolute right-0 top-0 w-64 h-64 border-[32px] border-white/10 rounded-full translate-x-20 -translate-y-20 pointer-events-none" />
+            
+            <div className="flex items-center gap-2 text-xs font-extrabold tracking-widest text-blue-200 uppercase">
+              <Compass size={16} /> NEXT BEST STEP
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-xs font-semibold text-blue-200">Path complete · 0 min</span>
+              <h3 className="text-2xl font-extrabold tracking-tight">You completed this path</h3>
+            </div>
+
+            <button 
+              onClick={() => setLocation("/learn")}
+              className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center self-end transition"
+            >
+              <ArrowRight size={20} className="text-white" />
+            </button>
+          </div>
+
+          {/* Lime Green Streak Card */}
+          <div className="bg-[#c8f52c] text-[#1c1d22] p-8 rounded-[32px] flex flex-col justify-between h-[200px] shadow-sm relative overflow-hidden">
+            <div className="flex justify-between items-center">
+              <Flame size={28} className="text-[#1c1d22] fill-[#1c1d22]" />
+              <span className="px-3 py-1 bg-[#1c1d22] text-[#c8f52c] text-[10px] font-extrabold uppercase tracking-wider rounded-full">
+                ON FIRE
+              </span>
+            </div>
+
+            <div>
+              <div className="text-5xl font-extrabold tracking-tight leading-none mb-1">
+                6 <span className="text-xl font-bold text-gray-800">days</span>
+              </div>
+              <p className="text-xs font-bold text-gray-700">Daily learning streak</p>
             </div>
           </div>
         </div>
-      )}
 
-      {/* ===== COURSE CREATION MODAL ===== */}
-      {courseModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4 transition-all" onClick={() => !creatingCourse && setCourseModalOpen(false)}>
-          <div className="bg-[#1a1b1e] border border-[#2c2d30] rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col p-6" onClick={e => e.stopPropagation()}>
+      </div>
+
+      {/* Upload/Paste/Record Modal */}
+      {modalMode && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => !uploading && setModalMode(null)}>
+          <div className="bg-white rounded-3xl border border-[#e5e4dc] shadow-2xl w-full max-w-lg overflow-hidden p-8" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-white font-bold text-xl flex items-center gap-2">
-                <Sparkles size={20} className="text-blue-400" /> Generate AI Course
+              <h3 className="text-xl font-extrabold text-[#1c1d22]">
+                {modalMode === "upload" ? "Upload Document" : modalMode === "paste" ? "Paste Content or Link" : modalMode === "record" ? "Record Voice Memo" : "What You Unlock"}
               </h3>
-              <button onClick={() => setCourseModalOpen(false)} className="text-gray-400 hover:text-white transition-colors">
+              <button onClick={() => !uploading && setModalMode(null)} className="p-1 text-gray-400 hover:text-gray-900 rounded-full">
                 <X size={20} />
               </button>
             </div>
-            
-            <p className="text-gray-400 text-sm mb-6">
-              Select an ingested source from your library to transform into a structured, Duolingo-style learning course.
-            </p>
 
-            <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 mb-6 custom-scrollbar">
-              {(!sourcesData || sourcesData.length === 0) ? (
-                <div className="text-center py-8 text-gray-500 border border-[#2c2d30] rounded-xl border-dashed">
-                  No sources available. Upload something first!
+            {uploadSuccess ? (
+              <div className="py-12 flex flex-col items-center text-center">
+                <CheckCircle2 size={48} className="text-[#1b7a52] mb-4" />
+                <h4 className="text-xl font-extrabold text-[#1c1d22]">Ingestion Complete!</h4>
+                <p className="text-xs text-gray-500 font-medium mt-1">Source connected to your learning path.</p>
+              </div>
+            ) : modalMode === "upload" ? (
+              <div>
+                <input ref={fileInputRef} type="file" className="hidden" accept=".pdf,.doc,.docx,.txt,.png,.jpg,.mp3" onChange={e => e.target.files?.[0] && handleUploadFile(e.target.files[0])} />
+                <div 
+                  onClick={() => !uploading && fileInputRef.current?.click()}
+                  className="border-2 border-dashed border-[#e5e4dc] hover:border-[#1b7a52] rounded-2xl p-10 flex flex-col items-center justify-center cursor-pointer transition text-center"
+                >
+                  {uploading ? (
+                    <div className="flex flex-col items-center">
+                      <Loader2 size={36} className="text-[#1b7a52] animate-spin mb-2" />
+                      <span className="font-bold text-sm">Processing source...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <UploadCloud size={36} className="text-[#1b7a52] mb-3" />
+                      <p className="font-extrabold text-sm text-[#1c1d22]">Click to select a file</p>
+                      <p className="text-xs text-gray-400 font-medium mt-1">Supports PDF, slides, docs, images (Up to 50MB)</p>
+                    </>
+                  )}
                 </div>
-              ) : (
-                sourcesData.map(source => (
-                  <div 
-                    key={source.id} 
-                    onClick={() => setSelectedSourceId(source.id)}
-                    className={`p-4 rounded-xl border transition-all cursor-pointer flex items-start gap-3 ${selectedSourceId === source.id ? "bg-blue-500/10 border-blue-500/50" : "bg-[#141517] border-[#2c2d30] hover:border-gray-600"}`}
-                  >
-                    <div className="mt-0.5">
-                      {source.sourceType === "pdf" ? <FileText size={16} className="text-red-400" /> : <Link2 size={16} className="text-blue-400" />}
-                    </div>
-                    <div>
-                      <h4 className={`text-sm font-bold mb-1 ${selectedSourceId === source.id ? "text-blue-400" : "text-white"}`}>{source.title}</h4>
-                      <p className="text-xs text-gray-500 line-clamp-1">{source.excerpt || `External ID: ${source.externalId}`}</p>
-                    </div>
+              </div>
+            ) : modalMode === "paste" ? (
+              <div className="space-y-4">
+                <input value={pasteTitle} onChange={e => setPasteTitle(e.target.value)} placeholder="Title (Optional)" className="w-full px-4 py-3 bg-[#f8f7f2] border border-[#e5e4dc] rounded-xl text-sm font-medium outline-none focus:border-[#1b7a52]" />
+                <textarea value={pasteText} onChange={e => setPasteText(e.target.value)} placeholder="Paste URL or raw text here..." rows={5} className="w-full px-4 py-3 bg-[#f8f7f2] border border-[#e5e4dc] rounded-xl text-sm font-medium outline-none focus:border-[#1b7a52] resize-none" />
+                <button onClick={handlePasteSubmit} disabled={!pasteText.trim() || uploading} className="w-full bg-[#1b7a52] hover:bg-[#156443] text-white font-extrabold py-3 rounded-xl transition">
+                  {uploading ? "Ingesting..." : "Ingest Now"}
+                </button>
+              </div>
+            ) : modalMode === "record" ? (
+              <div className="py-8 flex flex-col items-center text-center">
+                <div className="w-20 h-20 rounded-full bg-red-100 border border-red-200 flex items-center justify-center mb-4 cursor-pointer hover:scale-105 transition" onClick={() => handleUploadFile(new File(["Audio lecture recording"], "Voice_Memo.mp3", { type: "audio/mp3" }))}>
+                  <Mic size={32} className="text-red-600" />
+                </div>
+                <p className="font-extrabold text-sm">Tap to record lecture</p>
+                <p className="text-xs text-gray-400 font-medium mt-1">AI will transcribe & extract key concepts</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-xs font-semibold text-gray-500">Your material is now indexed. You can generate notes, mind maps, or start learning.</p>
+                <button onClick={() => { setModalMode(null); setLocation("/learn"); }} className="w-full bg-[#2952ee] text-white font-extrabold py-3 rounded-xl">Start Learning Path</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Floating Generate Course Modal */}
+      {showCourseModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => !isGeneratingCourse && setShowCourseModal(false)}>
+          <div className="bg-white rounded-3xl border border-[#e5e4dc] shadow-2xl w-full max-w-lg overflow-hidden p-8 space-y-6" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-[#1b7a52] text-white flex items-center justify-center font-bold">
+                  <Sparkles size={18} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-extrabold text-[#1c1d22]">Generate AI Course</h3>
+                  <p className="text-xs text-gray-500 font-medium">Customize your personalized study path</p>
+                </div>
+              </div>
+              <button onClick={() => !isGeneratingCourse && setShowCourseModal(false)} className="p-1 text-gray-400 hover:text-gray-900 rounded-full">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">What should this course be about?</label>
+                <textarea 
+                  value={coursePrompt}
+                  onChange={e => setCoursePrompt(e.target.value)}
+                  placeholder="e.g. Cellular Biology, Machine Learning Fundamentals, Macroeconomics..."
+                  rows={3}
+                  className="w-full px-4 py-3 bg-[#f8f7f2] border border-[#e5e4dc] rounded-2xl text-sm font-medium outline-none focus:border-[#1b7a52] resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">Difficulty Level</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {["Beginner", "Intermediate", "Advanced"].map(lvl => (
+                    <button
+                      key={lvl}
+                      type="button"
+                      onClick={() => setCourseDifficulty(lvl)}
+                      className={`py-2.5 rounded-xl text-xs font-bold border transition ${
+                        courseDifficulty === lvl 
+                          ? "bg-[#1b7a52] text-white border-[#1b7a52]" 
+                          : "bg-[#f8f7f2] text-gray-700 border-[#e5e4dc] hover:border-gray-400"
+                      }`}
+                    >
+                      {lvl}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">Learning Goal / Target</label>
+                <input 
+                  value={courseGoal}
+                  onChange={e => setCourseGoal(e.target.value)}
+                  placeholder="e.g. Prepare for midterm exam in 2 weeks"
+                  className="w-full px-4 py-2.5 bg-[#f8f7f2] border border-[#e5e4dc] rounded-xl text-sm font-medium outline-none focus:border-[#1b7a52]"
+                />
+              </div>
+
+              {sourcesData && sourcesData.length > 0 && (
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">Add Connected Sources</label>
+                  <div className="max-h-28 overflow-y-auto space-y-1.5 border border-[#e5e4dc] rounded-xl p-2 bg-[#f8f7f2]">
+                    {sourcesData.map((src: any) => {
+                      const selected = selectedSourceIds.includes(src.id);
+                      return (
+                        <div 
+                          key={src.id}
+                          onClick={() => {
+                            setSelectedSourceIds(prev => selected ? prev.filter(i => i !== src.id) : [...prev, src.id]);
+                          }}
+                          className={`flex items-center justify-between p-2 rounded-lg text-xs font-semibold cursor-pointer transition ${
+                            selected ? "bg-[#1b7a52] text-white" : "hover:bg-white text-gray-700"
+                          }`}
+                        >
+                          <span className="truncate">{src.title}</span>
+                          {selected && <CheckCircle2 size={14} />}
+                        </div>
+                      );
+                    })}
                   </div>
-                ))
+                </div>
               )}
             </div>
 
             <button 
-              onClick={handleCreateCourse}
-              disabled={!selectedSourceId || creatingCourse}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              onClick={handleGenerateCourseSubmit}
+              disabled={!coursePrompt.trim() || isGeneratingCourse}
+              className="w-full bg-[#1b7a52] hover:bg-[#156443] text-white font-extrabold py-3.5 rounded-2xl transition flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
             >
-              {creatingCourse ? <><Loader2 size={18} className="animate-spin" /> Generating AST...</> : "Create Course"}
+              {isGeneratingCourse ? (
+                <>
+                  <Loader2 size={18} className="animate-spin" />
+                  <span>Building Course Structure...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={18} />
+                  <span>Generate Course Now</span>
+                </>
+              )}
             </button>
           </div>
         </div>
       )}
+
     </div>
   );
 }

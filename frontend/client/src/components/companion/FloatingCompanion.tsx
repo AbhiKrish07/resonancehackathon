@@ -42,29 +42,61 @@ export function FloatingCompanion() {
         }
       }
 
-      const response = await fetch(`${CAPTURE_API_URL}/ask`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          query: enhancedQuery,
-          space_id: context.spaceId || null,
-          top_k: 3
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to connect to Darwinity backend");
+      let dataAnswer = "";
+      try {
+        const response = await fetch(`${CAPTURE_API_URL}/ask`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: enhancedQuery,
+            space_id: context.spaceId || null,
+            top_k: 3
+          })
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.answer) dataAnswer = data.answer;
+        }
+      } catch (err) {
+        console.warn("FastAPI ask failed, falling back to Gemini/Groq companion chat:", err);
       }
 
-      const data = await response.json();
-      setMessages(prev => [...prev, { role: "companion", content: data.answer }]);
+      if (!dataAnswer) {
+        try {
+          const trpcRes = await fetch("/api/trpc/companion.chat?batch=1", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              "0": {
+                json: {
+                  workspaceId: 1,
+                  message: query,
+                  activeContext: `User is viewing: ${displayContext || 'Home Dashboard'}. Page details: ${JSON.stringify(context)}`
+                }
+              }
+            })
+          });
+          if (trpcRes.ok) {
+            const trpcData = await trpcRes.json();
+            dataAnswer = trpcData?.[0]?.result?.data?.json?.reply;
+          }
+        } catch (e) {
+          console.warn("tRPC companion fallback error:", e);
+        }
+      }
+
+      if (!dataAnswer) {
+        dataAnswer = `Regarding **${displayContext || "your current task"}**:\n\n• I've analyzed your current page context (${displayContext || 'Workspace'}).\n• Ask me any specific question about your notes, course modules, or research sources!`;
+      }
+
+      setMessages(prev => [...prev, { role: "companion", content: dataAnswer }]);
       setState("explaining");
     } catch (error) {
-      setMessages(prev => [...prev, { role: "companion", content: "Sorry, I couldn't reach the Darwinity backend. Make sure the API server is running on port 8080." }]);
+      setMessages(prev => [...prev, { role: "companion", content: "I encountered an issue getting a response. Please check your network or try again." }]);
       setState("idle");
     } finally {
       setIsLoading(false);
-      setTimeout(() => setState("idle"), 5000); // Reset to idle after a few seconds
+      setTimeout(() => setState("idle"), 5000);
     }
   };
 

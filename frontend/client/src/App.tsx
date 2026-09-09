@@ -44,7 +44,6 @@ function Router() {
         <DashboardLayout>
           <Switch>
             <Route path={"/"} component={Dashboard} />
-            <Route path={"/course-builder/:courseId"} component={CourseBuilder} />
             <Route path={"/courses/:courseId"} component={CourseView} />
             <Route path={"/courses/:courseId/learn/:lessonId"} component={LessonView} />
             <Route path={"/artifacts"} component={ArtifactStudio} />

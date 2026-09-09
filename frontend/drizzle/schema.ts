@@ -1,235 +1,235 @@
-import { boolean, float, index, int, longtext, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { real, integer, text, sqliteTable, uniqueIndex, index } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
-export const users = mysqlTable("users", {
-  id: int("id").autoincrement().primaryKey(),
-  openId: varchar("openId", { length: 64 }).notNull().unique(),
+export const users = sqliteTable("users", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  openId: text("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
-  email: varchar("email", { length: 320 }),
-  loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  theme: varchar("theme", { length: 16 }).default("system").notNull(),
-  language: varchar("language", { length: 8 }).default("en").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  email: text("email", { length: 320 }),
+  loginMethod: text("loginMethod", { length: 64 }),
+  role: text({ enum: ["user", "admin"] }).default("user").notNull(),
+  theme: text("theme", { length: 16 }).default("system").notNull(),
+  language: text("language", { length: 8 }).default("en").notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
+  lastSignedIn: integer("lastSignedIn", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
 });
 
-export const workspaces = mysqlTable("workspaces", {
-  id: int("id").autoincrement().primaryKey(),
-  ownerId: int("ownerId").notNull(),
-  name: varchar("name", { length: 160 }).notNull(),
-  slug: varchar("slug", { length: 160 }).notNull(),
+export const workspaces = sqliteTable("workspaces", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  ownerId: integer("ownerId").notNull(),
+  name: text("name", { length: 160 }).notNull(),
+  slug: text("slug", { length: 160 }).notNull(),
   description: text("description"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
 }, table => ({ ownerIdx: index("workspace_owner_idx").on(table.ownerId), slugIdx: uniqueIndex("workspace_slug_idx").on(table.slug) }));
 
-export const workspaceMembers = mysqlTable("workspaceMembers", {
-  id: int("id").autoincrement().primaryKey(),
-  workspaceId: int("workspaceId").notNull(),
-  userId: int("userId").notNull(),
-  role: mysqlEnum("role", ["owner", "editor", "viewer"]).default("viewer").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+export const workspaceMembers = sqliteTable("workspaceMembers", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  workspaceId: integer("workspaceId").notNull(),
+  userId: integer("userId").notNull(),
+  role: text({ enum: ["owner", "editor", "viewer"] }).default("viewer").notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
 }, table => ({ memberIdx: uniqueIndex("workspace_member_idx").on(table.workspaceId, table.userId) }));
 
-export const canvases = mysqlTable("canvases", {
-  id: int("id").autoincrement().primaryKey(),
-  workspaceId: int("workspaceId").notNull(),
-  title: varchar("title", { length: 200 }).notNull(),
+export const canvases = sqliteTable("canvases", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  workspaceId: integer("workspaceId").notNull(),
+  title: text("title", { length: 200 }).notNull(),
   description: text("description"),
-  viewportX: float("viewportX").default(0).notNull(),
-  viewportY: float("viewportY").default(0).notNull(),
-  zoom: float("zoom").default(1).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  viewportX: real("viewportX").default(0).notNull(),
+  viewportY: real("viewportY").default(0).notNull(),
+  zoom: real("zoom").default(1).notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
 }, table => ({ workspaceIdx: index("canvas_workspace_idx").on(table.workspaceId) }));
 
-export const cardGroups = mysqlTable("cardGroups", {
-  id: int("id").autoincrement().primaryKey(),
-  canvasId: int("canvasId").notNull(),
-  title: varchar("title", { length: 200 }).notNull(),
-  color: varchar("color", { length: 32 }).notNull(),
-  x: float("x").default(0).notNull(),
-  y: float("y").default(0).notNull(),
-  width: float("width").default(540).notNull(),
-  height: float("height").default(360).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+export const cardGroups = sqliteTable("cardGroups", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  canvasId: integer("canvasId").notNull(),
+  title: text("title", { length: 200 }).notNull(),
+  color: text("color", { length: 32 }).notNull(),
+  x: real("x").default(0).notNull(),
+  y: real("y").default(0).notNull(),
+  width: real("width").default(540).notNull(),
+  height: real("height").default(360).notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
 }, table => ({ canvasIdx: index("group_canvas_idx").on(table.canvasId) }));
 
-export const cards = mysqlTable("cards", {
-  id: int("id").autoincrement().primaryKey(),
-  canvasId: int("canvasId").notNull(),
-  groupId: int("groupId"),
-  sourceId: int("sourceId"),
-  title: varchar("title", { length: 240 }).notNull(),
+export const cards = sqliteTable("cards", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  canvasId: integer("canvasId").notNull(),
+  groupId: integer("groupId"),
+  sourceId: integer("sourceId"),
+  title: text("title", { length: 240 }).notNull(),
   body: text("body").notNull(),
-  cardType: mysqlEnum("cardType", ["note", "quote", "question", "insight", "summary"]).default("note").notNull(),
-  accent: varchar("accent", { length: 32 }).default("mint").notNull(),
-  x: float("x").default(0).notNull(),
-  y: float("y").default(0).notNull(),
-  width: float("width").default(260).notNull(),
-  height: float("height").default(180).notNull(),
-  pinned: boolean("pinned").default(false).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  cardType: text({ enum: ["note", "quote", "question", "insight", "summary"] }).default("note").notNull(),
+  accent: text("accent", { length: 32 }).default("mint").notNull(),
+  x: real("x").default(0).notNull(),
+  y: real("y").default(0).notNull(),
+  width: real("width").default(260).notNull(),
+  height: real("height").default(180).notNull(),
+  pinned: integer("pinned", { mode: "boolean" }).default(false).notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
 }, table => ({ canvasIdx: index("card_canvas_idx").on(table.canvasId), sourceIdx: index("card_source_idx").on(table.sourceId) }));
 
-export const cardLinks = mysqlTable("cardLinks", {
-  id: int("id").autoincrement().primaryKey(),
-  canvasId: int("canvasId").notNull(),
-  fromCardId: int("fromCardId").notNull(),
-  toCardId: int("toCardId").notNull(),
-  label: varchar("label", { length: 120 }),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+export const cardLinks = sqliteTable("cardLinks", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  canvasId: integer("canvasId").notNull(),
+  fromCardId: integer("fromCardId").notNull(),
+  toCardId: integer("toCardId").notNull(),
+  label: text("label", { length: 120 }),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
 }, table => ({ canvasIdx: index("link_canvas_idx").on(table.canvasId) }));
 
-export const notes = mysqlTable("notes", {
-  id: int("id").autoincrement().primaryKey(),
-  workspaceId: int("workspaceId").notNull(),
-  canvasId: int("canvasId"),
-  title: varchar("title", { length: 240 }).notNull(),
+export const notes = sqliteTable("notes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  workspaceId: integer("workspaceId").notNull(),
+  canvasId: integer("canvasId"),
+  title: text("title", { length: 240 }).notNull(),
   body: text("body").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
 }, table => ({ workspaceIdx: index("note_workspace_idx").on(table.workspaceId) }));
 
-export const sources = mysqlTable("sources", {
-  id: int("id").autoincrement().primaryKey(),
-  workspaceId: int("workspaceId").notNull(),
-  title: varchar("title", { length: 300 }).notNull(),
-  sourceType: mysqlEnum("sourceType", ["url", "pdf", "document", "image", "audio", "artifact", "connector"]).default("url").notNull(),
+export const sources = sqliteTable("sources", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  workspaceId: integer("workspaceId").notNull(),
+  title: text("title", { length: 300 }).notNull(),
+  sourceType: text({ enum: ["url", "pdf", "document", "image", "audio", "artifact", "connector"] }).default("url").notNull(),
   url: text("url"),
   storageKey: text("storageKey"),
-  mimeType: varchar("mimeType", { length: 120 }),
+  mimeType: text("mimeType", { length: 120 }),
   excerpt: text("excerpt"),
   metadata: text("metadata"),
-  externalId: varchar("externalId", { length: 240 }),
-  adapter: varchar("adapter", { length: 80 }),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  externalId: text("externalId", { length: 240 }),
+  adapter: text("adapter", { length: 80 }),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
 }, table => ({ workspaceIdx: index("source_workspace_idx").on(table.workspaceId), externalIdx: index("source_external_idx").on(table.externalId) }));
 
-export const syncRuns = mysqlTable("syncRuns", {
-  id: int("id").autoincrement().primaryKey(),
-  workspaceId: int("workspaceId").notNull(),
-  adapter: varchar("adapter", { length: 80 }).notNull(),
-  status: mysqlEnum("status", ["idle", "running", "completed", "failed"]).default("idle").notNull(),
-  itemsProcessed: int("itemsProcessed").default(0).notNull(),
+export const syncRuns = sqliteTable("syncRuns", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  workspaceId: integer("workspaceId").notNull(),
+  adapter: text("adapter", { length: 80 }).notNull(),
+  status: text({ enum: ["idle", "running", "completed", "failed"] }).default("idle").notNull(),
+  itemsProcessed: integer("itemsProcessed").default(0).notNull(),
   errorMessage: text("errorMessage"),
   lastCursor: text("lastCursor"),
-  startedAt: timestamp("startedAt"),
-  finishedAt: timestamp("finishedAt"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  startedAt: integer("startedAt", { mode: "timestamp" }),
+  finishedAt: integer("finishedAt", { mode: "timestamp" }),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
 }, table => ({ workspaceIdx: index("sync_workspace_idx").on(table.workspaceId) }));
 
-export const sourceCards = mysqlTable("sourceCards", {
-  id: int("id").autoincrement().primaryKey(),
-  sourceId: int("sourceId").notNull(),
-  cardId: int("cardId").notNull(),
+export const sourceCards = sqliteTable("sourceCards", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  sourceId: integer("sourceId").notNull(),
+  cardId: integer("cardId").notNull(),
   passage: text("passage"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
 }, table => ({ sourceCardIdx: uniqueIndex("source_card_idx").on(table.sourceId, table.cardId) }));
 
-export const courses = mysqlTable("courses", {
-  id: int("id").autoincrement().primaryKey(),
-  workspaceId: int("workspaceId").notNull(),
-  title: varchar("title", { length: 300 }).notNull(),
+export const courses = sqliteTable("courses", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  workspaceId: integer("workspaceId").notNull(),
+  title: text("title", { length: 300 }).notNull(),
   description: text("description"),
-  sourceText: longtext("sourceText"),
-  status: mysqlEnum("status", ["draft", "generating", "generated", "exporting", "exported", "error"]).default("draft").notNull(),
-  astJson: longtext("astJson"),
+  sourceText: text("sourceText"),
+  status: text({ enum: ["draft", "generating", "generated", "exporting", "exported", "error"] }).default("draft").notNull(),
+  astJson: text("astJson"),
   validationErrors: text("validationErrors"),
   scormPackageKey: text("scormPackageKey"),
-  version: int("version").default(1).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  version: integer("version").default(1).notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
 }, table => ({ workspaceIdx: index("course_workspace_idx").on(table.workspaceId) }));
 
-export const modules = mysqlTable("modules", {
-  id: int("id").autoincrement().primaryKey(),
-  courseId: int("courseId").notNull(),
-  title: varchar("title", { length: 300 }).notNull(),
+export const modules = sqliteTable("modules", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  courseId: integer("courseId").notNull(),
+  title: text("title", { length: 300 }).notNull(),
   description: text("description"),
-  orderIndex: int("orderIndex").default(0).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  orderIndex: integer("orderIndex").default(0).notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
 }, table => ({ courseIdx: index("module_course_idx").on(table.courseId) }));
 
-export const lessons = mysqlTable("lessons", {
-  id: int("id").autoincrement().primaryKey(),
-  moduleId: int("moduleId").notNull(),
-  title: varchar("title", { length: 300 }).notNull(),
+export const lessons = sqliteTable("lessons", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  moduleId: integer("moduleId").notNull(),
+  title: text("title", { length: 300 }).notNull(),
   description: text("description"),
-  orderIndex: int("orderIndex").default(0).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  orderIndex: integer("orderIndex").default(0).notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
 }, table => ({ moduleIdx: index("lesson_module_idx").on(table.moduleId) }));
 
-export const learningObjectives = mysqlTable("learningObjectives", {
-  id: int("id").autoincrement().primaryKey(),
-  lessonId: int("lessonId").notNull(),
-  loId: varchar("loId", { length: 64 }).notNull(),
+export const learningObjectives = sqliteTable("learningObjectives", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  lessonId: integer("lessonId").notNull(),
+  loId: text("loId", { length: 64 }).notNull(),
   text: text("text").notNull(),
-  bloomVerb: varchar("bloomVerb", { length: 32 }).notNull(),
-  bloomLevel: varchar("bloomLevel", { length: 32 }).notNull(),
+  bloomVerb: text("bloomVerb", { length: 32 }).notNull(),
+  bloomLevel: text("bloomLevel", { length: 32 }).notNull(),
   sourceSpans: text("sourceSpans"),
   prerequisites: text("prerequisites"),
-  isVerified: boolean("isVerified").default(false).notNull(),
-  orderIndex: int("orderIndex").default(0).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  isVerified: integer("isVerified", { mode: "boolean" }).default(false).notNull(),
+  orderIndex: integer("orderIndex").default(0).notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
 }, table => ({ lessonIdx: index("lo_lesson_idx").on(table.lessonId), loIdIdx: uniqueIndex("lo_loid_idx").on(table.loId) }));
 
-export const assessments = mysqlTable("assessments", {
-  id: int("id").autoincrement().primaryKey(),
-  loId: int("loId").notNull(),
+export const assessments = sqliteTable("assessments", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  loId: integer("loId").notNull(),
   stem: text("stem").notNull(),
   optionsJson: text("optionsJson").notNull(),
-  correctIndex: int("correctIndex").notNull(),
-  bloomAlignment: varchar("bloomAlignment", { length: 32 }),
-  status: mysqlEnum("status", ["draft", "reviewed", "approved", "rejected"]).default("draft").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  correctIndex: integer("correctIndex").notNull(),
+  bloomAlignment: text("bloomAlignment", { length: 32 }),
+  status: text({ enum: ["draft", "reviewed", "approved", "rejected"] }).default("draft").notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
 }, table => ({ loIdx: index("assessment_lo_idx").on(table.loId) }));
 
-export const courseVersions = mysqlTable("courseVersions", {
-  id: int("id").autoincrement().primaryKey(),
-  courseId: int("courseId").notNull(),
-  version: int("version").notNull(),
-  astJson: longtext("astJson"),
+export const courseVersions = sqliteTable("courseVersions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  courseId: integer("courseId").notNull(),
+  version: integer("version").notNull(),
+  astJson: text("astJson"),
   changeLog: text("changeLog"),
-  createdBy: int("createdBy").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  createdBy: integer("createdBy").notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
 }, table => ({ courseVersionIdx: uniqueIndex("course_version_idx").on(table.courseId, table.version) }));
 
-export const studentMastery = mysqlTable("student_mastery", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
-  courseId: int("courseId").notNull(),
-  lessonId: int("lessonId").notNull(),
+export const studentMastery = sqliteTable("student_mastery", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("userId").notNull(),
+  courseId: integer("courseId").notNull(),
+  lessonId: integer("lessonId").notNull(),
   status: text("status").notNull().default("completed"),
-  score: int("score").notNull().default(100),
-  completedAt: timestamp("completedAt").defaultNow().notNull(),
+  score: integer("score").notNull().default(100),
+  completedAt: integer("completedAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
 }, table => ({ 
   userCourseIdx: index("mastery_user_course_idx").on(table.userId, table.courseId),
   lessonIdx: uniqueIndex("mastery_lesson_idx").on(table.userId, table.lessonId) 
 }));
 
-export const userPreferences = mysqlTable("userPreferences", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull().unique(),
-  fontSize: varchar("fontSize", { length: 16 }).default("Medium").notNull(),
-  editorFont: varchar("editorFont", { length: 16 }).default("Default").notNull(),
-  defaultView: varchar("defaultView", { length: 32 }).default("Dashboard").notNull(),
-  personalizedLearning: boolean("personalizedLearning").default(true).notNull(),
-  aiSuggestions: boolean("aiSuggestions").default(true).notNull(),
-  learningReminders: boolean("learningReminders").default(true).notNull(),
-  weeklyProgress: boolean("weeklyProgress").default(false).notNull(),
-  profileVisibility: boolean("profileVisibility").default(false).notNull(),
-  cloudStorage: boolean("cloudStorage").default(false).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+export const userPreferences = sqliteTable("userPreferences", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("userId").notNull().unique(),
+  fontSize: text("fontSize", { length: 16 }).default("Medium").notNull(),
+  editorFont: text("editorFont", { length: 16 }).default("Default").notNull(),
+  defaultView: text("defaultView", { length: 32 }).default("Dashboard").notNull(),
+  personalizedLearning: integer("personalizedLearning", { mode: "boolean" }).default(true).notNull(),
+  aiSuggestions: integer("aiSuggestions", { mode: "boolean" }).default(true).notNull(),
+  learningReminders: integer("learningReminders", { mode: "boolean" }).default(true).notNull(),
+  weeklyProgress: integer("weeklyProgress", { mode: "boolean" }).default(false).notNull(),
+  profileVisibility: integer("profileVisibility", { mode: "boolean" }).default(false).notNull(),
+  cloudStorage: integer("cloudStorage", { mode: "boolean" }).default(false).notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(sql`(strftime(\'%s\', \'now\'))`).notNull(),
 }, table => ({ userIdx: uniqueIndex("pref_user_idx").on(table.userId) }));
 
 export type User = typeof users.$inferSelect;

@@ -1,19 +1,23 @@
 import { and, desc, eq, like, or } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+import { drizzle } from "drizzle-orm/libsql";
+import { createClient } from "@libsql/client";
+import path from "path";
 import { canvases, cardGroups, cardLinks, cards, sources, syncRuns, users, workspaceMembers, workspaces, courses, modules, lessons, learningObjectives, assessments, courseVersions, studentMastery, type InsertUser } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _client: ReturnType<typeof createClient> | null = null;
 
 export async function getDb() {
-  if (!process.env.DATABASE_URL) {
-    // Dev mode: use a real SQLite-backed drizzle instance via mysql2 protocol
-    // Actually we can't mix dialects. Instead return null and let callers handle it.
-    // But we patch canEditWorkspace and ensureWorkspaceForUser below to still work.
-    return null;
-  }
   if (!_db) {
-    try { _db = drizzle(process.env.DATABASE_URL); } catch (error) { console.warn("[Database] Failed to connect:", error); _db = null; }
+    try { 
+      const dbPath = path.resolve(__dirname, "../../capture_data.db");
+      _client = createClient({ url: `file:${dbPath}` });
+      _db = drizzle(_client); 
+    } catch (error) { 
+      console.warn("[Database] Failed to connect:", error); 
+      _db = null; 
+    }
   }
   return _db;
 }
@@ -23,7 +27,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   const db = await getDb();
   if (!db) return;
   const values: InsertUser = { openId: user.openId, name: user.name ?? null, email: user.email ?? null, loginMethod: user.loginMethod ?? null, lastSignedIn: user.lastSignedIn ?? new Date(), role: user.role ?? (user.openId === ENV.ownerOpenId ? "admin" : "user") };
-  await db.insert(users).values(values).onDuplicateKeyUpdate({ set: { name: values.name, email: values.email, loginMethod: values.loginMethod, lastSignedIn: values.lastSignedIn, role: values.role } });
+  await db.insert(users).values(values).onConflictDoUpdate({ target: users.openId, set: { name: values.name, email: values.email, loginMethod: values.loginMethod, lastSignedIn: values.lastSignedIn, role: values.role } });
 }
 
 export async function getUserByOpenId(openId: string) {
@@ -42,11 +46,11 @@ export async function ensureWorkspaceForUser(userId: number) {
   const existing = await db.select().from(workspaces).where(eq(workspaces.ownerId, userId)).orderBy(workspaces.id).limit(1);
   if (existing[0]) return existing[0];
   const slug = `workspace-${userId}`;
-  const result = await db.insert(workspaces).values({ ownerId: userId, name: "Research Garden", slug, description: "A quiet place for connected thinking." });
-  const workspaceId = Number(result[0].insertId);
+  const result: any = await db.insert(workspaces).values({ ownerId: userId, name: "Research Garden", slug, description: "A quiet place for connected thinking." });
+  const workspaceId = Number(result.lastInsertRowid ?? result[0]?.insertId ?? 1);
   await db.insert(workspaceMembers).values({ workspaceId, userId, role: "owner" });
-  const canvasResult = await db.insert(canvases).values({ workspaceId, title: "Learning Garden", description: "A visual map of ideas and sources." });
-  const canvasId = Number(canvasResult[0].insertId);
+  const canvasResult: any = await db.insert(canvases).values({ workspaceId, title: "Learning Garden", description: "A visual map of ideas and sources." });
+  const canvasId = Number(canvasResult.lastInsertRowid ?? canvasResult[0]?.insertId ?? 1);
   await db.insert(cards).values([
     { canvasId, title: "Learning is a change in mental models", body: "A working thesis captured from the reading. Keep the wording close to the source, then add your own interpretation below.", cardType: "quote", accent: "mint", x: 120, y: 140, width: 270, height: 188 },
     { canvasId, title: "Models become useful when they connect", body: "A note about relationships: the value of an idea often comes from the bridges it creates between different observations.", cardType: "insight", accent: "lilac", x: 520, y: 320, width: 275, height: 188 },

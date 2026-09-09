@@ -62,7 +62,14 @@ export type LessonBlock = {
     | "multiple-choice"
     | "short-answer"
     | "reflection";
-  content: string;
+  content?: string;
+  title?: string;
+  front?: string;
+  back?: string;
+  question?: string;
+  options?: string[];
+  correctIndex?: number;
+  explanation?: string;
   sourceIds?: string[];
   metadata?: Record<string, any>;
 };
@@ -98,6 +105,12 @@ export type Course = {
   lessons: CourseLesson[];
   sourceIds: string[];
   learningGoal: string;
+  mastery?: {
+    completedLessonIds: string[];
+    completedLessons: number;
+    score?: number;
+    xp?: number;
+  };
   estimatedMinutes: number;
   readiness: number;
   progress: number;

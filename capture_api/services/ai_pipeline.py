@@ -104,6 +104,43 @@ Output ONLY the normalized content:"""
         return raw_text.strip()
 
 
+async def generate_tags_and_summary_from_text(content: str) -> Dict[str, Any]:
+    """Generates a brief summary and relevant tags for a document/capture for semantic search."""
+    if not content:
+        return {"summary": "", "tags": []}
+        
+    client = get_groq_client()
+    if not client:
+        return {"summary": content[:150] + "...", "tags": ["captured", "note"]}
+        
+    prompt = f"""You are a Context Intelligence classifier.
+Analyze the following text and provide a concise summary (1-2 sentences) and a list of 3-7 highly relevant tags for semantic search.
+
+Text:
+\"\"\"{content[:4000]}\"\"\"
+
+Respond ONLY with valid JSON in this structure:
+{{
+  "summary": "Brief 1-2 sentence summary of the core content",
+  "tags": ["tag1", "tag2", "tag3"]
+}}"""
+    try:
+        response = await _call_groq_with_fallback(
+            client=client,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            temperature=0.1
+        )
+        data = json.loads(response.choices[0].message.content)
+        return {
+            "summary": data.get("summary", ""),
+            "tags": data.get("tags", [])
+        }
+    except Exception as e:
+        print(f"Tags & Synthesis extraction error: {e}")
+        return {"summary": content[:150] + "...", "tags": ["captured"]}
+
+
 async def extract_entities_from_text(content: str) -> List[ExtractedEntity]:
     """
     Extracts structured entities: person, project, organization, task, decision, date, location, requirement, event.
@@ -258,73 +295,74 @@ async def synthesize_grounded_answer(
     sources_list = context_chunks or context_sources or []
     contras_list = active_contradictions or contradictions or []
     client = get_groq_client()
-    
-    sources_text = "\n\n".join([
-        f"[{i+1}] Source ({s.get('capture_type', 'text')}): {s.get('title')}\n{s.get('normalized_content') or s.get('original_content')}"
-        for i, s in enumerate(sources_list)
-    ])
+    sources_text = ""
+    if sources_list:
+        sources_text = "\n\n".join([
+            f"[{i+1}] {s.get('capture_type', 'text').upper()} — {s.get('title', 'Document')}:\n{(s.get('normalized_content') or s.get('original_content') or '')[:1500]}"
+            for i, s in enumerate(sources_list)
+        ])
     
     contradictions_text = ""
     if contras_list:
-        contradictions_text = "\n\nACTIVE CONTRADICTIONS IN MEMORY:\n" + "\n".join([
-            f"- Conflict in {c.get('conflicting_field')}: '{c.get('value_a')}' vs '{c.get('value_b')}'. Reason: {c.get('description') or c.get('explanation')}"
+        contradictions_text = "\n\nCONFLICTING INFO DETECTED IN YOUR NOTES:\n" + "\n".join([
+            f"- {c.get('conflicting_field')}: '{c.get('value_a')}' vs '{c.get('value_b')}' — {c.get('description') or c.get('explanation', '')}"
             for c in contras_list
         ])
 
     if not client:
-        ans = "Based on retrieved context:\n"
+        ans = "Based on your captured materials:\n"
         for i, s in enumerate(sources_list):
-            ans += f"[{i+1}] {s.get('title', 'Document')}\n"
-        if contras_list:
-            ans += "\nImportant contradictions noted:\n"
-            for c in contras_list:
-                desc = c.get('description') or c.get('explanation') or "Conflict detected"
-                ans += f"- {desc}\n"
+            ans += f"[{i+1}] {s.get('title', 'Document')}: {(s.get('normalized_content') or s.get('original_content') or '')[:200]}...\n"
+        if not sources_list:
+            ans = "I don't have any of your uploaded materials in my context yet. Please upload some PDFs or notes first, then ask me questions about them!"
         return {
             "answer": ans,
-            "why_sources": f"Selected {len(sources_list)} relevant sources based on keyword and semantic match."
+            "why_sources": f"Found {len(sources_list)} relevant sources."
         }
 
-    prompt = f"""You are CAPTURE — a Context Intelligence AI.
-Answer the user's question accurately and concisely using ONLY the provided sources.
+    has_context = bool(sources_list)
+    context_section = f"YOUR UPLOADED KNOWLEDGE:\n{sources_text}" if has_context else "No uploaded materials found yet."
+    
+    prompt = f"""You are Darwin — an intelligent AI study companion that helps students learn from their own uploaded materials.
 
-Rules:
-1. If there is a contradiction in the records, explicitly highlight it and explain which source is more recent/corroborated.
-2. Cite the source numbers e.g. [1], [2].
-3. Do not invent details not in the context.
-
-Retrieved Context:
-{sources_text}
+{context_section}
 {contradictions_text}
 
-User Question: {query}
+INSTRUCTIONS:
+- If the student's uploaded materials (above) answer the question, use them as your primary source and cite with [1], [2] etc.
+- If the materials are relevant but incomplete, supplement with your own knowledge and clearly say "Based on your notes plus my knowledge:..."
+- If the question is about something not in their materials at all, answer from your own knowledge as a helpful tutor — never say "sources don't contain this info".
+- NEVER reference Flight AI-842, Paris dates, or any information not asked about.
+- Be concise, friendly, and educational.
+- If they ask "what do I have", "what did I upload", or "what materials do I have" — list their uploaded files/documents from the context above.
 
-Output a JSON object with:
+Student Question: {query}
+
+Output a JSON object:
 {{
-  "answer": "Grounded answer text with citation brackets [1]",
-  "why_sources": "Brief explanation of why these sources were selected as the minimum sufficient context."
+  "answer": "Your helpful response here (cite [1] [2] if using their uploaded docs)",
+  "why_sources": "Brief note on what context was used"
 }}"""
     try:
         response = await _call_groq_with_fallback(
             client=client,
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
-            temperature=0.1
+            temperature=0.3
         )
         return json.loads(response.choices[0].message.content)
     except Exception as e:
         print(f"Answer synthesis error: {e}")
-        ans = "Based on retrieved context:\n"
-        for i, s in enumerate(sources_list):
-            ans += f"[{i+1}] {s.get('title', 'Document')}\n"
-        if contras_list:
-            ans += "\nImportant contradictions noted:\n"
-            for c in contras_list:
-                desc = c.get('description') or c.get('explanation') or "Conflict detected"
-                ans += f"- {desc}\n"
+        if sources_list:
+            ans = f"Based on your uploaded materials:\n"
+            for i, s in enumerate(sources_list[:3]):
+                content = (s.get("normalized_content") or s.get("original_content") or "")[:300]
+                ans += f"\n**{s.get('title', 'Document')}**: {content}..."
+        else:
+            ans = "I couldn't find specific materials about that in your uploads. Try uploading relevant PDFs or notes first!"
         return {
             "answer": ans,
-            "why_sources": f"Selected {len(sources_list)} relevant sources based on keyword and semantic match."
+            "why_sources": f"Used {len(sources_list)} documents from your library."
         }
 
 
@@ -415,7 +453,7 @@ Target audience level: {level}
 Expected time budget: {time_budget}
 
 Text:
-\"\"\"{content[:6000]}\"\"\"
+\"\"\"{content[:100000]}\"\"\"
 
 Output ONLY valid JSON matching this exact structure:
 {{

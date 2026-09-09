@@ -6,7 +6,7 @@ from typing import List, Dict, Any, Optional, Union
 from uuid import UUID, uuid4
 from datetime import datetime
 from models.schemas import (
-    User, Space, Capture, CaptureType, ProcessingStatus,
+    User, Space, Memory as Capture, MemoryType as CaptureType, ProcessingStatus,
     CaptureEntity, EntityType, ResolvedEntity, EntityMember,
     Contradiction, ContradictionType, ContradictionStatus
 )
@@ -357,6 +357,33 @@ class LocalContextDB:
             return True
         return False
 
+    # ---------------- Memory Aliases ----------------
+    def create_memory(self, user_id: str, original_content: str, memory_type: str = "text", capture_type: Optional[str] = None, title: Optional[str] = None, source_type: str = "manual", file_url: Optional[str] = None, space_ids: Optional[List[str]] = None, metadata: Optional[Dict] = None, **kwargs) -> Dict[str, Any]:
+        c_type = capture_type or memory_type or "text"
+        return self.create_capture(
+            user_id=user_id,
+            original_content=original_content,
+            capture_type=c_type,
+            title=title,
+            source_type=source_type,
+            file_url=file_url,
+            space_ids=space_ids,
+            metadata=metadata,
+            **{k: v for k, v in kwargs.items() if k in ["embedding", "authority_weight"]}
+        )
+
+    def get_memory(self, memory_id: str) -> Optional[Dict[str, Any]]:
+        return self.get_capture(memory_id)
+
+    def list_memories(self, user_id: Optional[str] = None, space_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        return self.list_captures(user_id=user_id, space_id=space_id)
+
+    def update_memory(self, memory_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        return self.update_capture(memory_id, updates)
+
+    def delete_memory(self, memory_id: str) -> bool:
+        return self.delete_capture(memory_id)
+
     def link_space_capture(self, space_id: str, capture_id: str, relevance_score: float = 1.0):
         sid = str(space_id)
         cid = str(capture_id)
@@ -521,15 +548,25 @@ class LocalContextDB:
 
     # ---------------- Vector Similarity Search ----------------
     def search_captures(self, query_embedding: List[float], space_id: Optional[str] = None,
-                        top_k: int = 5, min_score: float = 0.1) -> List[Dict[str, Any]]:
+                        top_k: int = 5, min_score: float = 0.05, query_text: str = "") -> List[Dict[str, Any]]:
         candidates = self.list_captures(space_id=space_id)
         scored = []
+        query_words = set((query_text or "").lower().split()) if query_text else set()
+        
         for cap in candidates:
             emb = cap.get("embedding")
-            if not emb:
-                score = 0.2 # fallback score
-            else:
+            content = (cap.get("normalized_content") or cap.get("original_content") or "").lower()
+            title = (cap.get("title") or "").lower()
+            
+            if emb and query_embedding:
                 score = cosine_similarity(query_embedding, emb)
+            else:
+                # Keyword-based fallback — always include if has content
+                score = 0.3  # base score for any document
+                if query_words:
+                    match_count = sum(1 for w in query_words if len(w) > 2 and (w in content or w in title))
+                    score = min(0.9, 0.3 + (match_count * 0.15))
+                    
             if score >= min_score:
                 cap_res = dict(cap)
                 cap_res["relevance_score"] = round(score, 4)

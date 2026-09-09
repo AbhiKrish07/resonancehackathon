@@ -197,112 +197,150 @@ function DashboardLayoutContent({
       <div className="relative" ref={sidebarRef}>
         <Sidebar
           collapsible="icon"
-          className="border-r-0"
+          className="border-r-0 bg-[#1a1b1f] text-[#a0a3bd]"
           disableTransition={isResizing}
         >
-          <SidebarHeader className="h-16 justify-center">
-            <div className="flex items-center gap-3 px-2 transition-all w-full">
-              <button
-                onClick={toggleSidebar}
-                className="h-8 w-8 flex items-center justify-center hover:bg-accent rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
-                aria-label="Toggle navigation"
-              >
-                <PanelLeft className="h-4 w-4 text-muted-foreground" />
-              </button>
+          <SidebarHeader className="h-20 justify-center px-4 bg-[#1a1b1f]">
+            <div className="flex items-center gap-3 transition-all w-full">
+              <div className="w-8 h-8 rounded-full bg-[#c8f52c] flex items-center justify-center text-[#1a1b1f] font-bold shrink-0">
+                <Sparkles className="h-4 w-4 fill-current" />
+              </div>
               {!isCollapsed ? (
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-semibold tracking-tight truncate">
-                    Navigation
+                <div className="flex flex-col min-w-0">
+                  <span className="font-extrabold tracking-tight text-white text-lg leading-tight truncate">
+                    learnloop
+                  </span>
+                  <span className="text-[10px] font-semibold text-[#8b8e9f] tracking-widest uppercase">
+                    MAKE IT STICK
                   </span>
                 </div>
               ) : null}
             </div>
           </SidebarHeader>
 
-          <SidebarContent className="gap-0 py-2">
+          <SidebarContent className="gap-2 py-4 px-3 bg-[#1a1b1f]">
             {!isCollapsed ? (
-              <div className="px-2">
-                <div className="mb-4">
-                  <div className="px-3 mb-1">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">STUDY STUDIO</span>
-                  </div>
-                  <SidebarMenu className="px-0">
-                    <SidebarMenuItem>
-                      <SidebarMenuButton isActive={location === "/"} onClick={() => setLocation("/")} className="h-9">
-                        <Home className={`h-4 w-4 ${location === "/" ? "text-primary" : ""}`} />
-                        <span>Home</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                    <SidebarMenuItem>
-                      <SidebarMenuButton isActive={location === "/library"} onClick={() => setLocation("/library")} className="h-9">
-                        <BookOpen className={`h-4 w-4 ${location === "/library" ? "text-primary" : ""}`} />
-                        <span>Library</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  </SidebarMenu>
-                </div>
-                
+              <div className="flex flex-col gap-2">
+                {/* Main Nav Items */}
+                <button
+                  onClick={() => setLocation("/")}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-full text-sm font-semibold transition-all ${
+                    location === "/"
+                      ? "bg-white text-[#1a1b1f] shadow-sm"
+                      : "text-[#9ca3af] hover:text-white hover:bg-[#25272e]"
+                  }`}
+                >
+                  <Layers className="h-4 w-4 shrink-0" />
+                  <span>My path</span>
+                </button>
+
+
+                <button
+                  onClick={() => setLocation("/stats")}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-full text-sm font-semibold transition-all ${
+                    location === "/stats"
+                      ? "bg-white text-[#1a1b1f] shadow-sm"
+                      : "text-[#9ca3af] hover:text-white hover:bg-[#25272e]"
+                  }`}
+                >
+                  <SquareStack className="h-4 w-4 shrink-0" />
+                  <span>Mastery & badges</span>
+                </button>
+
+                <button
+                  onClick={() => setLocation("/library")}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-full text-sm font-semibold transition-all ${
+                    location === "/library"
+                      ? "bg-white text-[#1a1b1f] shadow-sm"
+                      : "text-[#9ca3af] hover:text-white hover:bg-[#25272e]"
+                  }`}
+                >
+                  <Library className="h-4 w-4 shrink-0" />
+                  <span>Library</span>
+                </button>
+
+                <div className="my-2 border-t border-[#2a2c35]" />
+
+                <button
+                  onClick={() => setLocation("/artifacts")}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-full text-sm font-semibold transition-all ${
+                    location === "/artifacts"
+                      ? "bg-white text-[#1a1b1f] shadow-sm"
+                      : "text-[#9ca3af] hover:text-white hover:bg-[#25272e]"
+                  }`}
+                >
+                  <BookOpen className="h-4 w-4 shrink-0" />
+                  <span>Artifact Studio</span>
+                </button>
+
+                <div className="my-2 border-t border-[#2a2c35]" />
+
                 <SpacesNavSection />
                 <ActiveCoursesNav />
               </div>
             ) : (
-              <div className="px-2 text-center text-xs text-muted-foreground pt-4">
-                <SquareStack className="h-5 w-5 mx-auto mb-4" />
-                <Bot className="h-5 w-5 mx-auto" />
+              <div className="flex flex-col items-center gap-4 pt-4">
+                <button onClick={() => setLocation("/")} className="p-2 rounded-full hover:bg-[#25272e] text-white">
+                  <Home className="h-5 w-5" />
+                </button>
+                <button onClick={() => setLocation("/library")} className="p-2 rounded-full hover:bg-[#25272e] text-[#9ca3af]">
+                  <BookOpen className="h-5 w-5" />
+                </button>
+                <button onClick={() => setLocation("/canvas")} className="p-2 rounded-full hover:bg-[#25272e] text-[#9ca3af]">
+                  <SquareStack className="h-5 w-5" />
+                </button>
               </div>
             )}
-            
-            <SidebarGroup>
-              {!isCollapsed && (
-                <SidebarGroupLabel className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 mt-4">
-                  ACCOUNT
-                </SidebarGroupLabel>
-              )}
-              <SidebarGroupContent>
-                <SidebarMenu className="px-2 py-1">
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      isActive={location === "/profile"}
-                      onClick={() => setLocation("/profile")}
-                      tooltip="Profile"
-                      className={`h-10 transition-all font-normal`}
-                    >
-                      <UserCircle className={`h-4 w-4 ${location === "/profile" ? "text-primary" : ""}`} />
-                      <span>Profile</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
           </SidebarContent>
 
-          <SidebarFooter className="p-3">
+          <SidebarFooter className="p-4 bg-[#1a1b1f]">
+            {!isCollapsed && (
+              <div className="bg-[#24262d] rounded-2xl p-4 mb-4 text-xs flex flex-col gap-2 border border-[#2e313a]">
+                <div className="flex items-center justify-between text-[#9ca3af]">
+                  <span>Daily focus</span>
+                  <span className="font-semibold text-white">18 / 25 min</span>
+                </div>
+                <div className="w-full h-1.5 bg-[#1a1b1f] rounded-full overflow-hidden">
+                  <div className="h-full bg-[#c8f52c] rounded-full" style={{ width: '72%' }} />
+                </div>
+                <div className="flex items-center gap-1.5 text-[#e5e7eb] font-semibold pt-1">
+                  <Sparkles className="h-3.5 w-3.5 text-[#ff9800]" />
+                  <span>6 day streak</span>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between text-xs text-[#9ca3af] px-1 mb-3">
+              <span>Settings</span>
+              <Settings className="h-4 w-4 cursor-pointer hover:text-white transition-colors" onClick={() => setLocation("/profile")} />
+            </div>
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                  <Avatar className="h-9 w-9 border shrink-0">
-                    <AvatarFallback className="text-xs font-medium">
-                      {user?.name?.charAt(0).toUpperCase()}
+                <button className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-[#25272e] transition-colors w-full text-left focus:outline-none">
+                  <Avatar className="h-8 w-8 border-none bg-[#f5d0ab] text-[#8b4513] shrink-0">
+                    <AvatarFallback className="text-xs font-bold">
+                      {user?.name?.charAt(0).toUpperCase() || "G"}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
-                    <p className="text-sm font-medium truncate leading-none">
-                      {user?.name || "-"}
+                    <p className="text-sm font-semibold text-white truncate leading-none">
+                      {user?.name || "Guest learner"}
                     </p>
-                    <p className="text-xs text-muted-foreground truncate mt-1.5">
-                      {user?.email || "-"}
+                    <p className="text-xs text-[#717585] truncate mt-1">
+                      Preview mode
                     </p>
                   </div>
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuContent align="end" className="w-48 bg-[#24262d] text-white border-[#2e313a]">
                 {toggleTheme && (
                   <DropdownMenuItem
                     onClick={(e) => {
                       e.preventDefault();
                       toggleTheme();
                     }}
-                    className="cursor-pointer"
+                    className="cursor-pointer hover:bg-[#2d3039]"
                   >
                     <Settings className="mr-2 h-4 w-4" />
                     <span>Toggle Theme ({theme})</span>
@@ -310,7 +348,7 @@ function DashboardLayoutContent({
                 )}
                 <DropdownMenuItem
                   onClick={logout}
-                  className="cursor-pointer text-destructive focus:text-destructive"
+                  className="cursor-pointer text-red-400 focus:text-red-400 hover:bg-[#2d3039]"
                 >
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>Sign out</span>
